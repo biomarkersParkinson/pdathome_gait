@@ -1,89 +1,212 @@
 import os
-
+from dataclasses import dataclass
 from dotenv import load_dotenv
 from paradigma.constants import DataColumns
 
+# Load environment variables from .env file
 load_dotenv()
 
-# paths
-PATH_DATA = os.getenv('PATH_DATA')
-PATH_SENSOR_DATA = os.path.join(PATH_DATA, 'sensor_data')
-PATH_ANNOTATIONS_PD = os.path.join(PATH_DATA, 'video_annotations', 'pd')
-PATH_ANNOTATIONS_CONTROLS = os.path.join(PATH_DATA, 'video_annotations', 'controls')
+@dataclass(frozen=True)
+class Paths:
+    PATH_DATA: str
+    PATH_SENSOR_DATA: str
+    PATH_ANNOTATIONS_PD: str
+    PATH_ANNOTATIONS_CONTROLS: str
+    PATH_INPUT: str
+    PATH_GAIT_FEATURES: str
+    PATH_GAIT_PREDICTIONS: str
+    PATH_ARM_ACTIVITY_FEATURES: str
+    PATH_ARM_ACTIVITY_PREDICTIONS: str
+    PATH_CLINICAL_DATA: str
+    PATH_DATAFRAMES: str
+    PATH_CLASSIFIERS: str
+    PATH_SCALERS: str
+    PATH_THRESHOLDS: str
 
-PATH_INPUT = os.path.join(PATH_DATA, 'preprocessed_data', '0.input')
-PATH_GAIT_FEATURES = os.path.join(PATH_DATA, 'preprocessed_data', '1.gait_features')
-PATH_GAIT_PREDICTIONS = os.path.join(PATH_DATA, 'preprocessed_data', '2.gait_predictions')
-PATH_ARM_ACTIVITY_FEATURES = os.path.join(PATH_DATA, 'preprocessed_data', '3.arm_activity_features')
-PATH_ARM_ACTIVITY_PREDICTIONS = os.path.join(PATH_DATA, 'preprocessed_data', '4.arm_activity_predictions')
+    @classmethod
+    def from_env(cls):
+        PATH_DATA = os.getenv('PATH_DATA')
+        return cls(
+            PATH_DATA=PATH_DATA,
+            PATH_SENSOR_DATA=os.path.join(PATH_DATA, 'sensor_data'),
+            PATH_ANNOTATIONS_PD=os.path.join(PATH_DATA, 'video_annotations', 'pd'),
+            PATH_ANNOTATIONS_CONTROLS=os.path.join(PATH_DATA, 'video_annotations', 'controls'),
+            PATH_INPUT=os.path.join(PATH_DATA, 'preprocessed_data', '0.input'),
+            PATH_GAIT_FEATURES=os.path.join(PATH_DATA, 'preprocessed_data', '1.gait_features'),
+            PATH_GAIT_PREDICTIONS=os.path.join(PATH_DATA, 'preprocessed_data', '2.gait_predictions'),
+            PATH_ARM_ACTIVITY_FEATURES=os.path.join(PATH_DATA, 'preprocessed_data', '3.arm_activity_features'),
+            PATH_ARM_ACTIVITY_PREDICTIONS=os.path.join(PATH_DATA, 'preprocessed_data', '4.arm_activity_predictions'),
+            PATH_CLINICAL_DATA=os.path.join(PATH_DATA, 'preprocessed_data', '0.input', 'clinical_data'),
+            PATH_DATAFRAMES=os.path.join(PATH_DATA, 'preprocessed_data', '0.input', 'dataframes'),
+            PATH_CLASSIFIERS=os.path.join(PATH_DATA, 'preprocessed_data', '0.input', 'classifiers'),
+            PATH_SCALERS=os.path.join(PATH_DATA, 'preprocessed_data', '0.input', 'scalers'),
+            PATH_THRESHOLDS=os.path.join(PATH_DATA, 'preprocessed_data', '0.input', 'thresholds'),
+        )
 
-PATH_CLINICAL_DATA = os.path.join(PATH_DATA, 'preprocessed_data', '0.input', 'clinical_data')
-PATH_DATAFRAMES = os.path.join(PATH_INPUT, 'dataframes')
-PATH_CLASSIFIERS = os.path.join(PATH_INPUT, 'classifiers')
-PATH_SCALERS = os.path.join(PATH_INPUT, 'scalers')
-PATH_THRESHOLDS = os.path.join(PATH_INPUT, 'thresholds')
+@dataclass(frozen=True)
+class Columns:
+    ID: str
+    TIME: str
+    PRE_OR_POST: str
+    ACCELEROMETER_X: str
+    ACCELEROMETER_Y: str
+    ACCELEROMETER_Z: str
+    GRAV_ACCELEROMETER_X: str
+    GRAV_ACCELEROMETER_Y: str
+    GRAV_ACCELEROMETER_Z: str
+    GYROSCOPE_X: str
+    GYROSCOPE_Y: str
+    GYROSCOPE_Z: str
+    SIDE: str
+    FREE_LIVING_LABEL: str
+    ARM_LABEL: str
+    TREMOR_LABEL: str
+    ACTIVITY_LABEL_MAJORITY_VOTING: str
+    GAIT_MAJORITY_VOTING: str
+    ARM_LABEL_MAJORITY_VOTING: str
+    OTHER_ARM_ACTIVITY_MAJORITY_VOTING: str
+    PRED_GAIT: str
+    PRED_GAIT_PROBA: str
+    PRED_OTHER_ARM_ACTIVITY: str
+    PRED_OTHER_ARM_ACTIVITY_PROBA: str
+    ANGLE: str
+    ANGLE_SMOOTH: str
+    VELOCITY: str
+    WINDOW_NR: str
+    SEGMENT_NR: str
+    L_ACCELEROMETER: list
+    L_GYROSCOPE: list
+    L_ARM_ACTIVITY_ANNOTATIONS: list
 
-# column names
-ID_COLNAME = 'id'
-L_ARM_ACTIVITY_ANNOTATION_COLNAMES = ['tier', 'nan', 'start_s', 'end_s', 'duration_s', 'code']
+@dataclass(frozen=True)
+class Descriptives:
+    MOST_AFFECTED_SIDE: str
+    LEAST_AFFECTED_SIDE: str
+    RIGHT_WRIST: str
+    LEFT_WRIST: str
 
-# descriptives
-MOST_AFFECTED_SIDE = 'MAS'
-LEAST_AFFECTED_SIDE = 'LAS'
-RIGHT_WRIST = 'RW'
-LEFT_WRIST = 'LW'
+@dataclass(frozen=True)
+class Classifiers:
+    LOGISTIC_REGRESSION: str
+    RANDOM_FOREST: str
 
-# classifiers
-LOGISTIC_REGRESSION = 'logreg'
-RANDOM_FOREST = 'rf'
+@dataclass(frozen=True)
+class ParticipantIDs:
+    L_PD_IDS: list
+    L_HC_IDS: list
+    L_PRE_IDS: list
+    L_TREMOR_IDS: list
+    L_W_PARTS: list
+    L_L_NORMAL: list
+    L_R_NORMAL: list
 
-# lists of participants
-L_PD_IDS = ['hbv' + x for x in ['002', '012', '014', '015', '016', '017',
-                                '022', '024', '039', '043', '047',
-                                '054', '065', '077', '079', '090', '013',
-                                '018', '023', '038', '058', '063'
-                                ]
-]
+@dataclass(frozen=True)
+class Parameters:
+    SAMPLING_FREQUENCY: int
+    DOWNSAMPLED_FREQUENCY: int
 
-L_HC_IDS = ['hbv' + x for x in ['053', '072', '073', '082', '083', '084',
-                                '087', '091', '093', '097', '099',
-                                '100', '106', '108', '109', '110', '112',
-                                '115', '117', '122', '128', '136', '081'
-                                ]
-]
+@dataclass(frozen=True)
+class Labels:
+    GENERAL_PROTOCOL_STRUCTURE: dict
+    MOBILITY_STATES: dict
+    CLINICAL_TESTS: dict
+    MEDICATION_AND_MOTOR_STATUS: dict
+    TREMOR_ARM: dict
+    ARM: dict
 
-# several hc only have pre, no post data in the Matlab file
-L_PRE_IDS = ['hbv115', 'hbv117', 'hbv122', 'hbv136']
+@dataclass(frozen=True)
+class TiersMap:
+    MOBILITY_STATES_TIER: str
+    CLINICAL_TESTS_TIER: str
+    MEDICATION_AND_MOTOR_STATUS_TIER: str
+    TREMOR_TIER: str
+    LEFT_ARM_TIER: str
+    RIGHT_ARM_TIER: str
 
-L_TREMOR_IDS = ['hbv' + x for x in ['012', '013', '017', '018', '022',
-                                    '023', '038', '090']]
+# Instantiate objects
+paths = Paths.from_env()
+columns = Columns(
+    ID='id',
+    TIME=DataColumns.TIME,
+    PRE_OR_POST='pre_or_post',
+    ACCELEROMETER_X=DataColumns.ACCELEROMETER_X,
+    ACCELEROMETER_Y=DataColumns.ACCELEROMETER_Y,
+    ACCELEROMETER_Z=DataColumns.ACCELEROMETER_Z,
+    GRAV_ACCELEROMETER_X=f'grav_{DataColumns.ACCELEROMETER_X}',
+    GRAV_ACCELEROMETER_Y=f'grav_{DataColumns.ACCELEROMETER_Y}',
+    GRAV_ACCELEROMETER_Z=f'grav_{DataColumns.ACCELEROMETER_Z}',
+    GYROSCOPE_X=DataColumns.GYROSCOPE_X,
+    GYROSCOPE_Y=DataColumns.GYROSCOPE_Y,
+    GYROSCOPE_Z=DataColumns.GYROSCOPE_Z,
+    SIDE='side',
+    FREE_LIVING_LABEL='free_living_label',
+    ARM_LABEL='arm_label',
+    TREMOR_LABEL='tremor_label',
+    ACTIVITY_LABEL_MAJORITY_VOTING='activity_majority_voting',
+    GAIT_MAJORITY_VOTING='gait_majority_voting',
+    ARM_LABEL_MAJORITY_VOTING='arm_activity_majority_voting',
+    OTHER_ARM_ACTIVITY_MAJORITY_VOTING='other_arm_activity_majority_voting',
+    PRED_GAIT='pred_gait',
+    PRED_GAIT_PROBA='pred_gait_proba',
+    PRED_OTHER_ARM_ACTIVITY='pred_other_arm_activity',
+    PRED_OTHER_ARM_ACTIVITY_PROBA='pred_other_arm_activity_proba',
+    ANGLE='angle',
+    ANGLE_SMOOTH='angle_smooth',
+    VELOCITY='velocity',
+    WINDOW_NR='window_nr',
+    SEGMENT_NR='segment_nr',    
+    L_ACCELEROMETER=[DataColumns.ACCELEROMETER_X, DataColumns.ACCELEROMETER_Y, DataColumns.ACCELEROMETER_Z],
+    L_GYROSCOPE=[DataColumns.GYROSCOPE_X, DataColumns.GYROSCOPE_Y, DataColumns.GYROSCOPE_Z],
+    L_ARM_ACTIVITY_ANNOTATIONS=['tier', 'nan', 'start_s', 'end_s', 'duration_s', 'code']
+)
 
-L_W_PARTS = ['hbv013', 'hbv018', 'hbv023', 'hbv038', 'hbv058', 'hbv063', 'hbv080']
+descriptives = Descriptives(
+    MOST_AFFECTED_SIDE='MAS',
+    LEAST_AFFECTED_SIDE='LAS',
+    RIGHT_WRIST='RW',
+    LEFT_WRIST='LW'
+)
 
-# some participants have the sensor rotated 180 degrees
-L_L_NORMAL = ['hbv' + x for x in ['002', '012', '013', '014', '015', '017', '018',
-                                  '022', '023', '024', '038', '039', '043', '047',
-                                  '054', '063', '077', '079', '090', '053', '072',
-                                  '073', '081', '082', '083', '084', '087', '091',
-                                  '093', '097', '099', '100', '106', '108', '109',
-                                  '110', '112', '115', '117', '122', '128', '136']]
-L_R_NORMAL = ['hbv' + x for x in ['002', '012', '013', '014', '015', '017', '018',
-                                  '022', '023', '024', '038', '039', '043', '047',
-                                  '054', '063', '077', '079', '090', '053', '072',
-                                  '073', '081', '082', '083', '084', '087', '091',
-                                  '093', '097', '099', '100', '106', '108', '109',
-                                  '110', '112', '115', '117', '122', '128', '136',
-                                  '058']]
+classifiers = Classifiers(
+    LOGISTIC_REGRESSION='logreg',
+    RANDOM_FOREST='rf'
+)
 
-# parameters
-SAMPLING_FREQUENCY = 200 # Hz
-DOWNSAMPLED_FREQUENCY = 100 # Hz
+participant_ids = ParticipantIDs(
+    L_PD_IDS=['hbv' + x for x in [
+        '002', '012', '014', '015', '016', '017', '022', '024', '039', '043', '047',
+        '054', '065', '077', '079', '090', '013', '018', '023', '038', '058', '063'
+    ]],
+    L_HC_IDS=['hbv' + x for x in [
+        '053', '072', '073', '082', '083', '084', '087', '091', '093', '097', '099',
+        '100', '106', '108', '109', '110', '112', '115', '117', '122', '128', '136', '081'
+    ]],
+    L_PRE_IDS=['hbv115', 'hbv117', 'hbv122', 'hbv136'],
+    L_TREMOR_IDS=['hbv' + x for x in [
+        '012', '013', '017', '018', '022', '023', '038', '090'
+    ]],
+    L_W_PARTS=['hbv013', 'hbv018', 'hbv023', 'hbv038', 'hbv058', 'hbv063', 'hbv080'],
+    L_L_NORMAL=['hbv' + x for x in [
+        '002', '012', '013', '014', '015', '017', '018', '022', '023', '024', '038',
+        '039', '043', '047', '054', '063', '077', '079', '090', '053', '072', '073',
+        '081', '082', '083', '084', '087', '091', '093', '097', '099', '100', '106',
+        '108', '109', '110', '112', '115', '117', '122', '128', '136'
+    ]],
+    L_R_NORMAL=['hbv' + x for x in [
+        '002', '012', '013', '014', '015', '017', '018', '022', '023', '024', '038',
+        '039', '043', '047', '054', '063', '077', '079', '090', '053', '072', '073',
+        '081', '082', '083', '084', '087', '091', '093', '097', '099', '100', '106',
+        '108', '109', '110', '112', '115', '117', '122', '128', '136', '058'
+    ]]
+)
 
+parameters = Parameters(
+    SAMPLING_FREQUENCY=200,
+    DOWNSAMPLED_FREQUENCY=100
+)
 
-# mapping
-# Annotation labels
-D_LABELS = {
-    'General protocol structure': {
+labels = Labels(
+    GENERAL_PROTOCOL_STRUCTURE={
         1.0: 'Start synchronization of sensors',
         2.0: 'Installation of sensors',
         3.0: 'Motor examination (in OFF state)',
@@ -94,7 +217,7 @@ D_LABELS = {
         8.0: 'Taking off sensors',
         9.0: 'End synchronization of sensors',
     },
-    'Mobility states during free living parts and questionnaires': {
+    MOBILITY_STATES={
         1.0: 'Sitting',
         2.0: 'Standing',
         3.0: 'Walking',
@@ -119,7 +242,7 @@ D_LABELS = {
         13.0: 'Doing push-up exercises',
         99.0: 'Unknown',
     },
-    'Clinical tests during motor examination parts': {
+    CLINICAL_TESTS={
         1.1: 'Finger tapping left hand',
         1.2: 'Finger tapping right hand',
         2.1: 'Opening and closing left hand',
@@ -134,17 +257,17 @@ D_LABELS = {
         7.1: 'Walking pattern/TUG clockwise',
         7.2: 'Walking pattern/TUG anti-clockwise',
         8.0: 'Postural stability',
-        9.1: 'Posutral tremor left hand',
+        9.1: 'Postural tremor left hand',
         9.2: 'Postural tremor right hand',
         10.1: 'Kinetic tremor left hand',
         10.2: 'Kinetic tremor right hand',
     },
-    'Medication intake and motor status of the patient: On and OFF': {
+    MEDICATION_AND_MOTOR_STATUS={
         1.0: 'Medication intake',
         2.0: 'ON state',
         3.0: 'OFF state',
     },
-    'Tremor arm': {
+    TREMOR_ARM={
         99.0: 'Not assessable for more than 3 consecutive seconds',
         98.0: 'No tremor with significant upper limb activity',
         97.0: 'Tremor with significant upper limb activity',
@@ -154,16 +277,16 @@ D_LABELS = {
         1.0: 'Slight or mild tremor',
         0.0: 'No tremor'
     },
-    'Arm': {
+    ARM={
         1.0: 'Gait without other behaviours or other positions',
         2.0: 'Point at something / waving (raising hand)',
         3.0: 'Making hand gestures other than pointing',
-        4.0: 'Holding an object in forward position (this includes the whole behaviour including grabbing the object) (*Sometimes people hold their hands forward when walking)',
-        5.0: 'Holding an object in downward position (e.g., a book) (this includes the whole behaviour including grabbing the object)',
+        4.0: 'Holding an object in forward position (including grabbing the object)',
+        5.0: 'Holding an object in downward position (e.g., a book, including grabbing the object)',
         6.0: 'Grabbing an object (other than 7) / putting something down',
         7.0: 'Grabbing phone or similar object from pocket',
         8.0: 'Calling with phone',
-        9.0: 'Using the phones touchscreen',
+        9.0: 'Using the phone\'s touchscreen',
         10.0: 'Opening by grabbing (door, window, fridge, cabinet)',
         11.0: 'Closing by grabbing (door, window, fridge)',
         12.0: 'Closing by throwing, pushing back (door, window, fridge)',
@@ -180,22 +303,22 @@ D_LABELS = {
         23.0: 'Using hand for support in downward position (e.g. sitting down in chair, kitchen counter, holding bike saddle) - including grabbing',
         24.0: 'Turning on/off lights',
         25.0: 'Putting on jacket shoulders',
-        26.0: 'Holding hands in front (lijkt op 4)',
+        26.0: 'Holding hands in front (similar to 4)',
         27.0: 'Opening high (cupboard)',
         28.0: 'Taking off jacket (zipping, pulling off shoulders, etc.)',
         29.0: 'Hand on waist',
         30.0: 'Mowing lawn',
         31.0: 'Picking something up from the floor / object low',
         32.0: 'Hand on chest',
-        33.0: 'Rubbing hands / moving hands high frequency in front op body / stirring bowl',
+        33.0: 'Rubbing hands / moving hands high frequency in front of body / stirring bowl',
         34.0: 'Closing high (cupboard)',
-        35.0: 'Dog leash', 
+        35.0: 'Dog leash',
         36.0: 'Hanging up / picking up object high',
         37.0: 'Hands on pockets',
         38.0: 'Hands folded across',
         39.0: 'Hanging clothes on chair (e.g., jacket)',
         40.0: 'Pulling chair backward',
-        41.0: 'Untieing / putting on dog leash',
+        41.0: 'Untying / putting on dog leash',
         42.0: 'Pushing chair forward',
         43.0: 'Carrying large object (e.g., chair)',
         44.0: 'Opening by pushing forward',
@@ -209,7 +332,7 @@ D_LABELS = {
         52.0: 'Hand on butt',
         53.0: 'Hand clasped in front',
         54.0: 'Walking downstairs',
-        55.0: 'Make bed',
+        55.0: 'Making bed',
         56.0: 'Scratching back',
         57.0: 'Cleaning with cloth (kitchen, table)',
         58.0: 'With walking stick',
@@ -217,16 +340,16 @@ D_LABELS = {
         60.0: 'Assisting other arm / hand (e.g., when grabbing something from pocket)',
         61.0: 'Holding an object to chest, as if cuddling',
         99.0: 'Transition to/from sitting down',
-        100.0: 'cant assess',
-        101.0: 'cant assess'
+        100.0: 'Cannot assess',
+        101.0: 'Cannot assess'
     }
-}
+)
 
-D_TIERS_MAP = {
-    'Mobility states during free living parts and questionnaires': 'free_living',
-    'Clinical tests during motor examination parts': 'clinical_tests',
-    'Medication intake and motor status of the patient: On and OFF': 'med_and_motor_status',
-    'Tremor arm': 'tremor',
-    'Left arm': 'left_arm',
-    'Right arm': 'right_arm',
-}
+tiers_map = TiersMap(
+    MOBILITY_STATES_TIER='free_living',
+    CLINICAL_TESTS_TIER='clinical_tests',
+    MEDICATION_AND_MOTOR_STATUS_TIER='med_and_motor_status',
+    TREMOR_TIER='tremor',
+    LEFT_ARM_TIER='left_arm',
+    RIGHT_ARM_TIER='right_arm'
+)

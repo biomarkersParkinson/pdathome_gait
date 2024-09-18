@@ -1,5 +1,6 @@
 import json
 import numpy as np
+import os
 import pandas as pd
 import pickle
 
@@ -8,7 +9,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import roc_curve
 from sklearn.preprocessing import StandardScaler
 
-from pdathome.constants import *
+from pdathome.constants import classifiers, columns, descriptives, participant_ids, paths
 
 def cv_train_test_model(subject, df, model, l_predictors, l_predictors_scale, target_column_name, 
                         pred_proba_colname, pred_colname, step):
@@ -21,11 +22,11 @@ def cv_train_test_model(subject, df, model, l_predictors, l_predictors_scale, ta
     class_weight = None if step == 'gait' else 'balanced'
 
     # Split the data for training and testing
-    df_train = df[df[ID_COLNAME] != subject].copy()
-    df_test = df[df[ID_COLNAME] == subject].copy()
+    df_train = df[df[columns.ID] != subject].copy()
+    df_test = df[df[columns.ID] == subject].copy()
     
     # Fit a scaler on the pd participants
-    pd_train_mask = df_train[ID_COLNAME].isin(L_PD_IDS)
+    pd_train_mask = df_train[columns.ID].isin(participant_ids.L_PD_IDS)
     scaler = StandardScaler()
 
     # Scale the data
@@ -39,12 +40,12 @@ def cv_train_test_model(subject, df, model, l_predictors, l_predictors_scale, ta
     y_test = df_test[target_column_name].values.astype(int)
 
     # Initialize the model
-    if model == RANDOM_FOREST:
+    if model == classifiers.RANDOM_FOREST:
         clf = RandomForestClassifier(
             n_estimators=100, max_features='sqrt', min_samples_split=25, max_depth=15,
             criterion='gini', bootstrap=True, oob_score=True, class_weight=class_weight, random_state=22
         )
-    elif model == LOGISTIC_REGRESSION:
+    elif model == classifiers.LOGISTIC_REGRESSION:
         clf = LogisticRegression(
             penalty='l1', solver='saga', tol=1e-4, C=1e-2, class_weight=class_weight,
             random_state=22, n_jobs=-1
@@ -74,9 +75,9 @@ def cv_train_test_model(subject, df, model, l_predictors, l_predictors_scale, ta
         classification_threshold = df_test.loc[df_test[pred_colname] == 1, pred_proba_colname].min()
 
     # Feature importance
-    if model == RANDOM_FOREST:
+    if model == classifiers.RANDOM_FOREST:
         importances = pd.Series(clf.feature_importances_, index=l_predictors)
-    elif model == LOGISTIC_REGRESSION:
+    elif model == classifiers.LOGISTIC_REGRESSION:
         importances = pd.Series(clf.coef_[0], index=l_predictors)
     
     return df_test, classification_threshold, importances
@@ -84,38 +85,42 @@ def cv_train_test_model(subject, df, model, l_predictors, l_predictors_scale, ta
 
 def windows_to_timestamps(subject, df, path_output, pred_proba_colname, step):
 
+    if step not in ['gait', 'arm_activity']:
+        raise ValueError("Step not recognized")
+
     # Define base columns
-    l_subj_cols = ['side', 'window_nr', pred_proba_colname] + [x for x in df.columns if 'majority_voting' in x]
-    l_merge_ts_cols = ['window_nr', 'side']
-    l_merge_points_cols = ['time', 'side']
-    l_groupby_cols = ['time', 'side']
-    l_explode_cols = ['time']
-    l_dupl_cols = ['time', 'side']
+    l_subj_cols = [columns.SIDE, columns.WINDOW_NR, pred_proba_colname]
+    l_merge_ts_cols = [columns.WINDOW_NR, columns.SIDE]
+    l_merge_points_cols = [columns.TIME, columns.SIDE]
+    l_groupby_cols = [columns.TIME, columns.SIDE]
+    l_explode_cols = [columns.TIME]
+    l_dupl_cols = [columns.TIME, columns.SIDE]
 
     # Add PD-specific columns
-    if subject in L_PD_IDS:
-        pd_specific_cols = ['pre_or_post', 'arm_label']
-        l_subj_cols.append('pre_or_post')
+    if subject in participant_ids.L_PD_IDS:
+        pd_specific_cols = [columns.PRE_OR_POST, columns.ARM_LABEL]
+        l_subj_cols.append(columns.PRE_OR_POST)
         l_groupby_cols += pd_specific_cols
         l_explode_cols += pd_specific_cols
-        l_merge_ts_cols.append('pre_or_post')
-        l_merge_points_cols.append('pre_or_post')
-        l_dupl_cols.append('pre_or_post')
+        l_merge_ts_cols.append(columns.PRE_OR_POST)
+        l_merge_points_cols.append(columns.PRE_OR_POST)
+        l_dupl_cols.append(columns.PRE_OR_POST)
+
+    if step == 'gait':
+        l_subj_cols += [columns.GAIT_MAJORITY_VOTING, columns.ACTIVITY_LABEL_MAJORITY_VOTING]
+        path_features = paths.PATH_GAIT_FEATURES
+        l_explode_cols.append(columns.FREE_LIVING_LABEL)
+        l_groupby_cols.append(columns.FREE_LIVING_LABEL)
+    else:
+        l_subj_cols += [columns.OTHER_ARM_ACTIVITY_MAJORITY_VOTING, columns.ARM_LABEL_MAJORITY_VOTING]
+        path_features = paths.PATH_ARM_ACTIVITY_FEATURES
 
     # Select relevant columns
-    df = df[l_subj_cols]
-
-    # Set path and additional columns based on step
-    if step == 'gait':
-        path_features = PATH_GAIT_FEATURES
-        l_explode_cols.append('free_living_label')
-        l_groupby_cols.append('free_living_label')
-    else:
-        path_features = PATH_ARM_ACTIVITY_FEATURES
+    df = df[l_subj_cols]        
     
     # Load and combine timestamps data
-    df_ts_mas = pd.read_pickle(os.path.join(path_features, f'{subject}_{MOST_AFFECTED_SIDE}_ts.pkl')).assign(side=MOST_AFFECTED_SIDE)
-    df_ts_las = pd.read_pickle(os.path.join(path_features, f'{subject}_{LEAST_AFFECTED_SIDE}_ts.pkl')).assign(side=LEAST_AFFECTED_SIDE)
+    df_ts_mas = pd.read_pickle(os.path.join(path_features, f'{subject}_{descriptives.MOST_AFFECTED_SIDE}_ts.pkl')).assign(side=descriptives.MOST_AFFECTED_SIDE)
+    df_ts_las = pd.read_pickle(os.path.join(path_features, f'{subject}_{descriptives.LEAST_AFFECTED_SIDE}_ts.pkl')).assign(side=descriptives.LEAST_AFFECTED_SIDE)
     df_ts = pd.concat([df_ts_mas, df_ts_las], ignore_index=True)
 
     # Explode timestamp data for merging
@@ -128,7 +133,10 @@ def windows_to_timestamps(subject, df, path_output, pred_proba_colname, step):
     df_single_points.reset_index(drop=True, inplace=True)
 
     # Group by relevant columns and calculate mean prediction probability
-    df_pred_per_point = df_single_points.groupby(l_groupby_cols)[pred_proba_colname].mean().reset_index()
+    if step == 'gait':
+        df_pred_per_point = df_single_points.groupby(l_groupby_cols)[pred_proba_colname].mean().reset_index()
+    else:
+        df_pred_per_point = df_single_points.groupby(l_groupby_cols)[pred_proba_colname].mean().reset_index()
 
     # Save the final result
     output_path = os.path.join(path_output, f'{subject}_ts.pkl')
@@ -146,7 +154,7 @@ def store_model(df, model, l_predictors, l_predictors_scale, target_column_name,
 
     # Standardize features based on the PD subjects    
     scaler = StandardScaler()
-    df_pd = df.loc[df[ID_COLNAME].isin(L_PD_IDS), l_predictors_scale]
+    df_pd = df.loc[df[columns.ID].isin(participant_ids.L_PD_IDS), l_predictors_scale]
     df_scaled = df.copy()
     df_scaled[l_predictors_scale] = scaler.fit_transform(df_pd)
 
@@ -154,12 +162,12 @@ def store_model(df, model, l_predictors, l_predictors_scale, target_column_name,
     y = df[target_column_name].astype(int).values
 
     # train on all subjects and store model
-    if model == RANDOM_FOREST:
+    if model == classifiers.RANDOM_FOREST:
         clf = RandomForestClassifier(
             n_estimators=100, max_features='sqrt', min_samples_split=25, max_depth=15,
             criterion='gini', bootstrap=True, oob_score=True, class_weight=class_weight, random_state=22
         )
-    elif model == LOGISTIC_REGRESSION:
+    elif model == classifiers.LOGISTIC_REGRESSION:
         clf = LogisticRegression(
             penalty='l1', solver='saga', tol=1e-4, C=1e-2, class_weight=class_weight,
             random_state=22, n_jobs=-1
