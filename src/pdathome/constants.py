@@ -123,6 +123,12 @@ class TiersMap:
     LEFT_ARM_TIER: str
     RIGHT_ARM_TIER: str
 
+@dataclass(frozen=True)
+class UpdrsPart3Mapping:
+    D_UPDRS_PART_3_MAPPING: dict
+    D_UPDRS_PART_3_HYPOKINESIA_MAPPING: dict
+    D_UPDRS_PPP_SCORING: dict
+
 # Instantiate objects
 paths = Paths.from_env()
 columns = Columns(
@@ -352,4 +358,70 @@ tiers_map = TiersMap(
     TREMOR_TIER='tremor',
     LEFT_ARM_TIER='left_arm',
     RIGHT_ARM_TIER='right_arm'
+)
+
+updrs_part_3_map = UpdrsPart3Mapping(
+    D_UPDRS_PART_3_MAPPING = {
+        'right': {
+            'hypokinesia': {
+                'UPDRS_3_3b': 'Rigidity RUE',
+                'UPDRS_3_3d': 'Rigidity RLE',
+                'UPDRS_3_4a': 'FT RH',
+                'UPDRS_3_5a': 'Movement RH',
+                'UPDRS_3_6a': 'P-S RH',
+                'UPDRS_3_7a': 'TT RF',
+                'UPDRS_3_8a': 'LA RL',
+            },
+            'tremor': {
+                'UPDRS_3_15a': 'Postural tremor amplitude RA',
+                'UPDRS_3_16a': 'Kinetic tremor amplitude RA',
+                'UPDRS_3_17a': 'Rest tremor amplitude RA',
+                'UPDRS_3_17c': 'Rest tremor amplitude RL',
+            }
+        },
+        'left': {
+            'hypokinesia': {
+                'UPDRS_3_3c': 'Rigidity LUE',
+                'UPDRS_3_3e': 'Rigidity LLE',
+                'UPDRS_3_4b': 'FT LH',
+                'UPDRS_3_5b': 'Movement LH',
+                'UPDRS_3_6b': 'P-S LH',
+                'UPDRS_3_7b': 'TT LF',
+                'UPDRS_3_8b': 'LA LL',
+            },
+            'tremor': {
+                'UPDRS_3_15b': 'Postural tremor amplitude LA',
+                'UPDRS_3_16b': 'Kinetic tremor amplitude LA',
+                'UPDRS_3_17b': 'Rest tremor amplitude LA',
+                'UPDRS_3_17d': 'Rest tremor amplitude LL',
+            }
+        }
+    },
+    D_UPDRS_PART_3_HYPOKINESIA_MAPPING = {
+        'UPDRS_3_3b': 'Rigidity RUE',
+        'UPDRS_3_3c': 'Rigidity LUE',
+        'UPDRS_3_3d': 'Rigidity RLE',
+        'UPDRS_3_3e': 'Rigidity LLE',
+        'UPDRS_3_4a': 'FT RH',
+        'UPDRS_3_4b': 'FT LH',
+        'UPDRS_3_5a': 'Movement RH',
+        'UPDRS_3_5b': 'Movement LH',
+        'UPDRS_3_6a': 'P-S RH',
+        'UPDRS_3_6b': 'P-S LH',
+        'UPDRS_3_7a': 'TT RF',
+        'UPDRS_3_7b': 'TT LF',
+        'UPDRS_3_8a': 'LA RL',
+        'UPDRS_3_8b': 'LA LL',
+    }, 
+    D_UPDRS_PPP_SCORING = {
+        med_stage: {
+            'hypokinesia': {
+                'right_side': [f'Up3{med_stage}RigRue', f'Up3{med_stage}RigRle'],
+                'left_side': [f'Up3{med_stage}RigLle', f'Up3{med_stage}RigLue'],
+                'watch_side': [f'Up3{med_stage}LAgiYesDev', f'Up3{med_stage}FiTaYesDev', f'Up3{med_stage}ToTaYesDev', f'Up3{med_stage}ProSYesDev', f'Up3{med_stage}HaMoYesDev'],
+                'non_watch_side': [f'Up3{med_stage}HaMoNonDev', f'Up3{med_stage}LAgiNonDev', f'Up3{med_stage}ToTaNonDev', f'Up3{med_stage}FiTaNonDev', f'Up3{med_stage}ProSNonDev']
+            },
+            'other': [f'Up3{med_stage}Gait', f'Up3{med_stage}Facial', f'Up3{med_stage}RigNec', f'Up3{med_stage}Speech', f'Up3{med_stage}Arise']
+        } for med_stage in ['Of', 'On']
+    }
 )
