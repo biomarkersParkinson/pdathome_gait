@@ -1,6 +1,7 @@
 import os
 from dataclasses import dataclass
 from dotenv import load_dotenv
+
 from paradigma.constants import DataColumns
 
 # Load environment variables from .env file
@@ -8,10 +9,11 @@ load_dotenv()
 
 @dataclass(frozen=True)
 class Paths:
-    PATH_DATA: str
+    PATH_RAW_DATA: str
     PATH_SENSOR_DATA: str
     PATH_ANNOTATIONS_PD: str
     PATH_ANNOTATIONS_CONTROLS: str
+    PATH_PREPROCESSED_DATA: str
     PATH_INPUT: str
     PATH_GAIT_FEATURES: str
     PATH_GAIT_PREDICTIONS: str
@@ -25,22 +27,24 @@ class Paths:
 
     @classmethod
     def from_env(cls):
-        PATH_DATA = os.getenv('PATH_DATA')
+        PATH_RAW_DATA = os.getenv('PATH_RAW_DATA')
+        PATH_PREPROCESSED_DATA = os.getenv('PATH_PREPROCESSED_DATA')
         return cls(
-            PATH_DATA=PATH_DATA,
-            PATH_SENSOR_DATA=os.path.join(PATH_DATA, 'sensor_data'),
-            PATH_ANNOTATIONS_PD=os.path.join(PATH_DATA, 'video_annotations', 'pd'),
-            PATH_ANNOTATIONS_CONTROLS=os.path.join(PATH_DATA, 'video_annotations', 'controls'),
-            PATH_INPUT=os.path.join(PATH_DATA, 'preprocessed_data', '0.input'),
-            PATH_GAIT_FEATURES=os.path.join(PATH_DATA, 'preprocessed_data', '1.gait_features'),
-            PATH_GAIT_PREDICTIONS=os.path.join(PATH_DATA, 'preprocessed_data', '2.gait_predictions'),
-            PATH_ARM_ACTIVITY_FEATURES=os.path.join(PATH_DATA, 'preprocessed_data', '3.arm_activity_features'),
-            PATH_ARM_ACTIVITY_PREDICTIONS=os.path.join(PATH_DATA, 'preprocessed_data', '4.arm_activity_predictions'),
-            PATH_CLINICAL_DATA=os.path.join(PATH_DATA, 'preprocessed_data', '0.input', 'clinical_data'),
-            PATH_DATAFRAMES=os.path.join(PATH_DATA, 'preprocessed_data', '0.input', 'dataframes'),
-            PATH_CLASSIFIERS=os.path.join(PATH_DATA, 'preprocessed_data', '0.input', 'classifiers'),
-            PATH_SCALERS=os.path.join(PATH_DATA, 'preprocessed_data', '0.input', 'scalers'),
-            PATH_THRESHOLDS=os.path.join(PATH_DATA, 'preprocessed_data', '0.input', 'thresholds'),
+            PATH_RAW_DATA=PATH_RAW_DATA,
+            PATH_SENSOR_DATA=os.path.join(PATH_RAW_DATA, 'sensor_data'),
+            PATH_ANNOTATIONS_PD=os.path.join(PATH_RAW_DATA, 'video_annotations', 'pd'),
+            PATH_ANNOTATIONS_CONTROLS=os.path.join(PATH_RAW_DATA, 'video_annotations', 'controls'),
+            PATH_PREPROCESSED_DATA=PATH_PREPROCESSED_DATA,
+            PATH_INPUT=os.path.join(PATH_PREPROCESSED_DATA, '0.input'),
+            PATH_GAIT_FEATURES=os.path.join(PATH_PREPROCESSED_DATA, '1.gait_features'),
+            PATH_GAIT_PREDICTIONS=os.path.join(PATH_PREPROCESSED_DATA, '2.gait_predictions'),
+            PATH_ARM_ACTIVITY_FEATURES=os.path.join(PATH_PREPROCESSED_DATA, '3.arm_activity_features'),
+            PATH_ARM_ACTIVITY_PREDICTIONS=os.path.join(PATH_PREPROCESSED_DATA, '4.arm_activity_predictions'),
+            PATH_CLINICAL_DATA=os.path.join(PATH_PREPROCESSED_DATA, '0.input', 'clinical_data'),
+            PATH_DATAFRAMES=os.path.join(PATH_PREPROCESSED_DATA, 'dataframes'),
+            PATH_CLASSIFIERS=os.path.join(PATH_PREPROCESSED_DATA, '0.input', 'classifiers'),
+            PATH_SCALERS=os.path.join(PATH_PREPROCESSED_DATA, '0.input', 'scalers'),
+            PATH_THRESHOLDS=os.path.join(PATH_PREPROCESSED_DATA, '0.input', 'thresholds'),
         )
 
 @dataclass(frozen=True)

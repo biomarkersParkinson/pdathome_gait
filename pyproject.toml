@@ -4,6 +4,7 @@ version = "0.1.0"
 description = ""
 authors = ["Erikpostt <erik_post_6@hotmail.com>"]
 readme = "README.md"
+packages = [{include = "pdathome", from = "src"}]
 
 [tool.poetry.dependencies]
 python = "^3.11"
