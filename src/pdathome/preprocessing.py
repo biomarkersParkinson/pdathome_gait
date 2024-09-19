@@ -30,11 +30,11 @@ def prepare_data(subject):
     l_other_cols = [columns.FREE_LIVING_LABEL]
 
     if subject in participant_ids.L_PD_IDS:
-        file_sensor_data = 'sensor_data_pd.mat'
+        file_sensor_data = 'phys_cur_PD_merged.mat'
         path_annotations = paths.PATH_ANNOTATIONS_PD
         l_other_cols += [columns.ARM_LABEL, columns.PRE_OR_POST]
     else:
-        file_sensor_data = 'sensor_data_controls.mat'
+        file_sensor_data = 'phys_cur_HC_merged.mat'
         path_annotations = paths.PATH_ANNOTATIONS_CONTROLS
 
     if subject in participant_ids.L_TREMOR_IDS:
