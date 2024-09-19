@@ -94,6 +94,8 @@ class Descriptives:
 class Classifiers:
     LOGISTIC_REGRESSION: str
     RANDOM_FOREST: str
+    GAIT_DETECTION_CLASSIFIER_SELECTED: str
+    ARM_ACTIVITY_CLASSIFIER_SELECTED: str
 
 @dataclass(frozen=True)
 class ParticipantIDs:
@@ -164,7 +166,9 @@ descriptives = Descriptives(
 
 classifiers = Classifiers(
     LOGISTIC_REGRESSION='logreg',
-    RANDOM_FOREST='rf'
+    RANDOM_FOREST='rf',
+    GAIT_DETECTION_CLASSIFIER_SELECTED='rf',
+    ARM_ACTIVITY_CLASSIFIER_SELECTED='logreg'
 )
 
 participant_ids = ParticipantIDs(
