@@ -9,8 +9,11 @@
 module load 2023
 module load Python/3.11.3-GCCcore-12.3.0
 
+# Activate Poetry environment
+source $(poetry env info --path)/bin/activate
+
 #Run same program over many different inputs
 nproc=3
-input_ids=$(cat ../id_files/all.txt)
+input_ids=$(cat ../../id_files/all.txt)
 
 python -u 0.preparing_data.py $nproc $input_ids

@@ -1,9 +1,5 @@
 import functools
-import os
 import sys
-
-# # if you are unable to load pdathome.constants, you need to add the path to the src folder to the system path
-sys.path.append(os.path.abspath(os.path.join('..', 'src')))
 
 from multiprocessing import Pool
 
@@ -21,7 +17,7 @@ if __name__ == '__main__':
     with Pool(int(nproc)) as p:
         partial_process_file = functools.partial(pooling_func)
         try:
-            results = p.map(partial_process_file, l_ids)     
+            p.map(partial_process_file, l_ids)     
         except:
             PrintException()
 
