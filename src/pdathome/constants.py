@@ -203,7 +203,23 @@ participant_ids = ParticipantIDs(
         '039', '043', '047', '054', '063', '077', '079', '090', '053', '072', '073',
         '081', '082', '083', '084', '087', '091', '093', '097', '099', '100', '106',
         '108', '109', '110', '112', '115', '117', '122', '128', '136', '058'
-    ]]
+    ]],
+    L_PD_MOST_AFFECTED_LEFT=['hbv' + x for x in [
+        '013', '014', '015', '016', '017', '022', '024', '039', '043', '047', '077'
+    ]],
+    L_PD_MOST_AFFECTED_RIGHT=['hbv' + x for x in [
+        '002', '012', '018', '023', '038', '054', '058', '063', '065', '074', '079', '090'
+    ]],
+    L_PD_DOMINANT_LEFT=['hbv' + x for x in [
+        '002', '016', '024', '043', '065'
+    ]],
+    L_PD_DOMINANT_BOTH=['hbv' + x for x in [
+        '013', '079'
+    ]],
+    L_PD_DOMINANT_RIGHT=['hbv' + x for x in [
+        '012', '014', '015', '017', '022', '039', '047', '054',
+        '077', '090', '018', '023', '038', '058', '063'
+    ]],
 )
 
 parameters = Parameters(
@@ -360,7 +376,7 @@ tiers_map = TiersMap(
     RIGHT_ARM_TIER='right_arm'
 )
 
-updrs_part_3_map = UpdrsPart3Mapping(
+updrs_map = UpdrsPart3Mapping(
     D_UPDRS_PART_3_MAPPING = {
         'right': {
             'hypokinesia': {
