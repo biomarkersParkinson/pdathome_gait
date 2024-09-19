@@ -9,7 +9,82 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import roc_curve
 from sklearn.preprocessing import StandardScaler
 
+from paradigma.gait_analysis_config import GaitFeatureExtractionConfig
+
 from pdathome.constants import classifiers, columns, descriptives, participant_ids, paths
+from pdathome.load import load_dataframes_directory
+
+
+def detect_gait(subject, classifier):
+    # Initialize configuration
+    config = GaitFeatureExtractionConfig()
+
+    # Define predictors
+    l_predictors = list(config.d_channels_values.keys())
+    l_predictors_scale = [x for x in l_predictors if 'dominant' not in x]
+
+    # Load data
+    df_all_subjects = load_dataframes_directory(
+        directory_path=paths.PATH_GAIT_FEATURES,
+        l_ids=participant_ids.L_PD_IDS + participant_ids.L_HC_IDS
+    )
+
+    # Lists to store results
+    l_thresholds = []
+    l_importances = []
+
+    # Iterate over subjects and process data
+    for subject in participant_ids.L_PD_IDS + participant_ids.L_HC_IDS:
+        print(f"Processing subject {subject}")
+
+        # Train and test model
+        df_test, classification_threshold, importances = cv_train_test_model(
+            subject=subject,
+            df=df_all_subjects,
+            model=classifier,
+            l_predictors=l_predictors,
+            l_predictors_scale=l_predictors_scale,
+            target_column_name=columns.GAIT_MAJORITY_VOTING, 
+            pred_proba_colname=columns.PRED_GAIT_PROBA,
+            pred_colname=columns.PRED_GAIT,
+            step='gait'
+        )
+    
+        # Collect thresholds and importances
+        l_thresholds.append(classification_threshold)
+        l_importances.append(importances)
+
+        # Save predictions
+        windows_to_timestamps(
+            subject=subject, df=df_test,
+            path_output=os.path.join(paths.PATH_GAIT_PREDICTIONS, classifier), 
+            pred_proba_colname=columns.PRED_GAIT_PROBA,
+            step='gait'
+        )
+        
+    # Save average threshold
+    mean_threshold = np.mean(l_thresholds)
+    with open(os.path.join(paths.PATH_THRESHOLDS, 'gait', f'{classifier}_threshold.txt'), 'w') as f:
+        f.write(str(mean_threshold))
+
+    # Save importances
+    with open(os.path.join(paths.PATH_CLASSIFIERS, f'{classifier}_importances.txt'), 'w') as f:
+        # Flatten the list of dictionaries and format them
+        all_importances = pd.concat([pd.Series(imp) for imp in l_importances], axis=1).mean(axis=1)
+        for feature, importance in all_importances.items():
+            f.write(f'{feature}: {importance}\n')
+
+    store_model(
+        df=df_all_subjects,
+        model=classifier,
+        l_predictors=l_predictors,
+        l_predictors_scale=l_predictors_scale,
+        target_column_name=columns.GAIT_MAJORITY_VOTING,
+        path_scalers=paths.PATH_SCALERS,
+        path_classifiers=paths.PATH_CLASSIFIERS,
+        step='gait'
+    )
+
 
 def cv_train_test_model(subject, df, model, l_predictors, l_predictors_scale, target_column_name, 
                         pred_proba_colname, pred_colname, step):
