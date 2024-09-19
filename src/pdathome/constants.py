@@ -34,6 +34,7 @@ class Paths:
             PATH_SENSOR_DATA=os.path.join(PATH_RAW_DATA, 'sensor_data'),
             PATH_ANNOTATIONS_PD=os.path.join(PATH_RAW_DATA, 'video_annotations', 'pd'),
             PATH_ANNOTATIONS_CONTROLS=os.path.join(PATH_RAW_DATA, 'video_annotations', 'controls'),
+            PATH_PREPROCESSED_DATA=PATH_PREPROCESSED_DATA,
             PATH_INPUT=os.path.join(PATH_PREPROCESSED_DATA, '0.input'),
             PATH_GAIT_FEATURES=os.path.join(PATH_PREPROCESSED_DATA, '1.gait_features'),
             PATH_GAIT_PREDICTIONS=os.path.join(PATH_PREPROCESSED_DATA, '2.gait_predictions'),
