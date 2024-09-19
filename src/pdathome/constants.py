@@ -74,6 +74,7 @@ class Columns:
     VELOCITY: str
     WINDOW_NR: str
     SEGMENT_NR: str
+    SEGMENT_CAT: str
     L_ACCELEROMETER: list
     L_GYROSCOPE: list
     L_ARM_ACTIVITY_ANNOTATIONS: list
@@ -99,20 +100,31 @@ class ParticipantIDs:
     L_W_PARTS: list
     L_L_NORMAL: list
     L_R_NORMAL: list
+    L_PD_MOST_AFFECTED_LEFT: list
+    L_PD_MOST_AFFECTED_RIGHT: list
+    L_PD_DOMINANT_LEFT: list
+    L_PD_DOMINANT_BOTH: list
+    L_PD_DOMINANT_RIGHT: list
 
 @dataclass(frozen=True)
 class Parameters:
     SAMPLING_FREQUENCY: int
     DOWNSAMPLED_FREQUENCY: int
+    SEGMENT_GAP_GAIT: float
+    SEGMENT_GAP_ARM_ACTIVITY: float
 
 @dataclass(frozen=True)
-class Labels:
+class LabelsMap:
     GENERAL_PROTOCOL_STRUCTURE: dict
     MOBILITY_STATES: dict
     CLINICAL_TESTS: dict
     MEDICATION_AND_MOTOR_STATUS: dict
     TREMOR_ARM: dict
     ARM: dict
+
+@dataclass(frozen=True)
+class LabelsRename:
+    ARM_ACTIVITY: dict
 
 @dataclass(frozen=True)
 class TiersMap:
@@ -160,7 +172,8 @@ columns = Columns(
     ANGLE_SMOOTH='angle_smooth',
     VELOCITY='velocity',
     WINDOW_NR='window_nr',
-    SEGMENT_NR='segment_nr',    
+    SEGMENT_NR='segment_nr',  
+    SEGMENT_CAT='segment_cat',  
     L_ACCELEROMETER=[DataColumns.ACCELEROMETER_X, DataColumns.ACCELEROMETER_Y, DataColumns.ACCELEROMETER_Z],
     L_GYROSCOPE=[DataColumns.GYROSCOPE_X, DataColumns.GYROSCOPE_Y, DataColumns.GYROSCOPE_Z],
     L_ARM_ACTIVITY_ANNOTATIONS=['tier', 'nan', 'start_s', 'end_s', 'duration_s', 'code']
@@ -224,10 +237,12 @@ participant_ids = ParticipantIDs(
 
 parameters = Parameters(
     SAMPLING_FREQUENCY=200,
-    DOWNSAMPLED_FREQUENCY=100
+    DOWNSAMPLED_FREQUENCY=100,
+    SEGMENT_GAP_GAIT=2.5,
+    SEGMENT_GAP_ARM_ACTIVITY=1.5
 )
 
-labels = Labels(
+labels = LabelsMap(
     GENERAL_PROTOCOL_STRUCTURE={
         1.0: 'Start synchronization of sensors',
         2.0: 'Installation of sensors',
@@ -440,4 +455,75 @@ updrs_map = UpdrsPart3Mapping(
             'other': [f'Up3{med_stage}Gait', f'Up3{med_stage}Facial', f'Up3{med_stage}RigNec', f'Up3{med_stage}Speech', f'Up3{med_stage}Arise']
         } for med_stage in ['Of', 'On']
     }
+)
+
+labels_rename = LabelsRename(
+    ARM_ACTIVITY = {
+        'Gait without other behaviours or other positions': 'Gait without other arm movements',
+        'Grabbing an object (other than 7) / putting something down': 'Grabbing',
+        'Closing by grabbing (door, window, fridge)': 'Closing by pulling',
+        'Closing by throwing, pushing back (door, window, fridge)': 'Closing by pushing',
+        'Hanging up / picking up object high': 'Grabbing high',
+        'Holding an object in forward position (this includes the whole behaviour including grabbing the object) (*Sometimes people hold their hands forward when walking)': 'Holding forward',
+        'Holding an object in downward position (e.g., a book) (this includes the whole behaviour including grabbing the object)': 'Holding downward',
+        'Holding hands in front (lijkt op 4)': 'Hands forward',
+        'Making hand gestures other than pointing': 'Making hand gestures',
+        'Opening by grabbing (door, window, fridge, cabinet)': 'Opening by pulling',
+        'Point at something / waving (raising hand)': 'Pointing',
+        'Using hand for support in downward position (e.g. sitting down in chair, kitchen counter, holding bike saddle) - including grabbing': 'Using hand for support',
+        'Using hand for support in upward position (e.g. holding wall, door, bike steering wheel) - including grabbing': 'Using hand for support',
+        'Fixing clothes': 'Fixing clothes',
+        'Fixing devices': 'Fixing devices',
+        'cant assess': 'Cant assess',
+        'Touching face': 'Touching face',
+        'Transition to/from sitting down': 'Transition',
+        'Grabbing phone or similar object from pocket': 'Grabbing from pocket',
+        'Calling with phone': 'Calling with phone',
+        'Using the phones touchscreen': 'Using phone touchscreen',
+        'Holding hands behind back': 'Hand behind back',
+        'Hand in front trouser pocket': 'Hand in front trouser pocket',
+        'Hand in jacket pocket': 'Hand in jacket pocket',
+        'Washing hand': 'Washing hand',
+        'Patting pet': 'Patting pet',
+        'Putting on jacket arms': 'Putting on jacket',
+        'Turning on/off lights': 'Turning on/off lights',
+        'Putting on jacket shoulders': 'Putting on jacket',
+        'Opening high (cupboard)': 'Opening by pulling',
+        'Taking off jacket (zipping, pulling off shoulders, etc.)': 'Taking off jacket',
+        'Hand on waist': 'Hand on waist',
+        'Mowing lawn': 'Mowing lawn',
+        'Picking something up from the floor / object low': 'Grabbing',
+        'Hand on chest': 'Hand on chest',
+        'Rubbing hands / moving hands high frequency in front op body / stirring bowl': 'Holding forward and rotating',
+        'Closing high (cupboard)': 'Closing by pushing',
+        'Dog leash': 'Holding dog leash',
+        'Hanging up / picking up object high': 'Grabbing',
+        'Hands on pockets': 'Hand on trouser pocket',
+        'Hands folded across': 'Hands folded across',
+        'Hanging clothes on chair (e.g., jacket)': 'Grabbing',
+        'Pulling chair backward': 'Pulling backward',
+        'Untieing / putting on dog leash': 'Putting on dog leash',
+        'Pushing chair forward': 'Pushing forward',
+        'Carrying large object (e.g., chair)': 'Holding forward',
+        'Opening by pushing forward': 'Opening by pushing',
+        'Holding an object behind': 'Hand behind back',
+        'Vacuum cleaning': 'Vacuum cleaning',
+        'Brushing teeth': 'Brushing teeth',
+        'Holding an object forward + moving around object': 'Holding forward and rotating',
+        'Pulling object behind (e.g., trash container)': 'Pulling behind back',
+        'Running / hurrying': 'Running',
+        'Taking off jacket - pulling off shoulders': 'Taking off jacket',
+        'Hand on butt': 'Hand in back pocket',
+        'Hand clasped in front': 'Hand clasped in front',
+        'Walking downstairs': 'Walking stairs',
+        'Make bed': 'Making bed',
+        'Scratching back': 'Scratching back',
+        'Cleaning with cloth (kitchen, table)': 'Cleaning with cloth',
+        'With walking stick': 'Using walking stick',
+        'Taking off jacket - arm': 'Taking off jacket',
+        'Assisting other arm / hand (e.g., when grabbing something from pocket)': 'Holding forward',
+        'Holding an object to chest, as if cuddling': 'Hand on chest',
+        'Transition to/from sitting down': 'Transition',
+        'non_gait': 'Not gait'
+    },
 )

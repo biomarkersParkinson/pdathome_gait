@@ -139,8 +139,10 @@ def windows_to_timestamps(subject, df, path_output, pred_proba_colname, step):
         df_pred_per_point = df_single_points.groupby(l_groupby_cols)[pred_proba_colname].mean().reset_index()
 
     # Save the final result
-    output_path = os.path.join(path_output, f'{subject}_ts.pkl')
-    df_pred_per_point.to_pickle(output_path)
+    if not os.path.exists(path_output):
+        os.makedirs(path_output)
+        
+    df_pred_per_point.to_pickle(os.path.join(path_output, f'{subject}.pkl'))
 
 
 def store_model(df, model, l_predictors, l_predictors_scale, target_column_name, path_scalers, path_classifiers, step):
