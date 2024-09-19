@@ -3,7 +3,7 @@ import sys
 
 from multiprocessing import Pool
 from pdathome.classification import detect_gait, filter_gait
-from pdathome.preprocessing import prepare_data, preprocess_gait, preprocess_filtering_gait
+from pdathome.preprocessing import prepare_data, preprocess_gait_detection, preprocess_filtering_gait
 
 # Configure logging
 logging.basicConfig(
@@ -14,7 +14,7 @@ logging.basicConfig(
 # Mapping of step numbers to functions
 steps_map = {
     '1': prepare_data,
-    '2': preprocess_gait,
+    '2': preprocess_gait_detection,
     '3': detect_gait,
     '4': preprocess_filtering_gait,
     '5': filter_gait,
