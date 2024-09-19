@@ -14,6 +14,7 @@ source $(poetry env info --path)/bin/activate
 
 #Run same program over many different inputs
 nproc=3
+steps=12345
 input_ids=$(cat ../../id_files/all.txt)
 
-python -u 0.preparing_data.py $nproc $input_ids
+python -u run_pipeline.py $nproc $steps $input_ids
