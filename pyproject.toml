@@ -8,7 +8,9 @@ readme = "README.md"
 [tool.poetry.dependencies]
 python = "^3.11"
 pandas = "^2.2.2"
-numpy = "^2.1.1"
+numpy = "^1.26.4"
+paradigma = "^0.3.1"
+python-dotenv = "^1.0.1"
 
 
 [build-system]
