@@ -41,7 +41,7 @@ class Paths:
             PATH_ARM_ACTIVITY_FEATURES=os.path.join(PATH_PREPROCESSED_DATA, '3.arm_activity_features'),
             PATH_ARM_ACTIVITY_PREDICTIONS=os.path.join(PATH_PREPROCESSED_DATA, '4.arm_activity_predictions'),
             PATH_CLINICAL_DATA=os.path.join(PATH_PREPROCESSED_DATA, '0.input', 'clinical_data'),
-            PATH_DATAFRAMES=os.path.join(PATH_PREPROCESSED_DATA, 'dataframes'),
+            PATH_DATAFRAMES=os.path.join(PATH_PREPROCESSED_DATA, '0.input', 'dataframes'),
             PATH_CLASSIFIERS=os.path.join(PATH_PREPROCESSED_DATA, '0.input', 'classifiers'),
             PATH_SCALERS=os.path.join(PATH_PREPROCESSED_DATA, '0.input', 'scalers'),
             PATH_THRESHOLDS=os.path.join(PATH_PREPROCESSED_DATA, '0.input', 'thresholds'),
