@@ -14,6 +14,7 @@ from paradigma.gait_analysis_config import GaitFeatureExtractionConfig, ArmSwing
 
 from pdathome.constants import classifiers, columns, descriptives, participant_ids, paths
 from pdathome.load import load_dataframes_directory
+from pdathome.utils import save_to_pickle
 
 def classify(
     subject: str,
@@ -254,8 +255,12 @@ def windows_to_timestamps(subject, df, path_output, pred_proba_colname, step):
     # Save the final result
     if not os.path.exists(path_output):
         os.makedirs(path_output)
-        
-    df_pred_per_point.to_pickle(os.path.join(path_output, f'{subject}.pkl'))
+
+    save_to_pickle(
+        df=df_pred_per_point,
+        path=path_output,
+        filename=f'{subject}.pkl'
+    )
 
 
 def store_model(df, model, l_predictors, l_predictors_scale, target_column_name, path_scalers, path_classifiers, step):
@@ -293,6 +298,10 @@ def store_model(df, model, l_predictors, l_predictors_scale, target_column_name,
 
     # Save the model as a pickle file
     model_path = os.path.join(path_classifiers, f'clf_{model}.pkl')
+
+    if not os.path.exists(path_classifiers):
+        os.makedirs(path_classifiers)
+
     with open(model_path, 'wb') as f:
         pickle.dump(clf, f)
 
@@ -304,6 +313,10 @@ def store_model(df, model, l_predictors, l_predictors_scale, target_column_name,
     }
 
     scaler_path = os.path.join(path_scalers, f'scaler_params_{step}.json')
+
+    if not os.path.exists(path_scalers):
+        os.makedirs(path_scalers)
+        
     with open(scaler_path, 'w') as f:
         json.dump(scaler_params, f)
 

@@ -18,6 +18,7 @@ from paradigma.windowing import tabulate_windows, create_segments, discard_segme
 from pdathome.constants import classifiers, columns, descriptives, tiers_labels_map, \
     tiers_rename, parameters, participant_ids, paths
 from pdathome.load import load_stage_start_end, load_sensor_data, load_video_annotations
+from pdathome.utils import save_to_pickle
 
 
 def prepare_data(subject):
@@ -90,7 +91,11 @@ def prepare_data(subject):
         df_sensors = df_sensors.drop(columns=l_drop_cols)
 
         # temporarily store as pickle until tsdf issue is resolved
-        df_sensors[l_cols_to_export].to_pickle(os.path.join(paths.PATH_DATAFRAMES, f'{subject}_{side}.pkl'))
+        save_to_pickle(
+            df=df_sensors[l_cols_to_export],
+            path=paths.PATH_DATAFRAMES,
+            filename=f'{subject}_{side}.pkl'
+        )
 
 
 def preprocess_gait_detection(subject):
@@ -188,7 +193,11 @@ def preprocess_gait_detection(subject):
             l_sensor_colnames=config.l_accelerometer_cols
         )
 
-        df_windowed[l_export_cols].to_pickle(os.path.join(paths.PATH_GAIT_FEATURES, f'{subject}_{side}.pkl'))
+        save_to_pickle(
+            df=df_windowed[l_export_cols],
+            path=paths.PATH_GAIT_FEATURES,
+            filename=f'{subject}_{side}.pkl'
+        )
 
 
 def preprocess_filtering_gait(subject):
@@ -412,7 +421,11 @@ def preprocess_filtering_gait(subject):
 
         l_export_cols = [columns.TIME, columns.PRE_OR_POST, columns.SEGMENT_NR, columns.WINDOW_NR, columns.OTHER_ARM_ACTIVITY_MAJORITY_VOTING, columns.ARM_LABEL_MAJORITY_VOTING] + list(arm_activity_config.d_channels_values.keys())
 
-        df_windowed[l_export_cols].to_pickle(os.path.join(paths.PATH_ARM_ACTIVITY_FEATURES, f'{subject}_{side}.pkl'))
+        save_to_pickle(
+            df=df_windowed[l_export_cols],
+            path=paths.PATH_ARM_ACTIVITY_FEATURES,
+            filename=f'{subject}_{side}.pkl'
+        )
 
 
 def determine_wrist_pos(subject, watch_side, d_participant_distribution):
