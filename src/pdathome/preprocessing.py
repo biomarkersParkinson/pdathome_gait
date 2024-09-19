@@ -90,7 +90,7 @@ def prepare_data(subject):
         df_sensors[l_cols_to_export].to_pickle(os.path.join(paths.PATH_DATAFRAMES, f'{subject}_{side}.pkl'))
 
 
-def preprocess_gait(subject, side, path_input=paths.PATH_DATAFRAMES, path_output=paths.PATH_GAIT_FEATURES):
+def preprocess_gait_detection(subject, side, path_input=paths.PATH_DATAFRAMES, path_output=paths.PATH_GAIT_FEATURES):
     print(f"Time {datetime.datetime.now()} - {subject} {side} - Preprocessing gait ...")
     df = pd.read_pickle(os.path.join(path_input, f'{subject}_{side}.pkl'))
 
