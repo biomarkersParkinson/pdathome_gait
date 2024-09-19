@@ -1,4 +1,5 @@
 import datetime
+import json
 import numpy as np
 import os
 import pandas as pd
@@ -12,12 +13,85 @@ from paradigma.imu_preprocessing import butterworth_filter
 from paradigma.preprocessing_config import IMUPreprocessingConfig
 from paradigma.windowing import tabulate_windows
 
-from pdathome.constants import columns, descriptives, parameters, participant_ids, paths
-from pdathome.load import load_stage_start_end
+from pdathome.constants import columns, descriptives, tiers_labels_map, tiers_rename, parameters, participant_ids, paths
+from pdathome.load import load_stage_start_end, load_sensor_data, load_video_annotations
+
+
+def prepare_data(subject):
+    print(f"Time {datetime.datetime.now()} - {subject} - Preparing data ...")
+    with open(os.path.join(paths.PATH_CLINICAL_DATA, 'distribution_participants.json'), 'r') as f:
+        d_participant_distribution = json.load(f)
+
+    l_time_cols = [columns.TIME]
+    l_sensor_cols = columns.L_ACCELEROMETER + columns.L_GYROSCOPE
+    l_other_cols = [columns.FREE_LIVING_LABEL]
+
+    if subject in participant_ids.L_PD_IDS:
+        file_sensor_data = 'sensor_data_pd.mat'
+        path_annotations = paths.PATH_ANNOTATIONS_PD
+        l_other_cols += [columns.ARM_LABEL, columns.PRE_OR_POST]
+    else:
+        file_sensor_data = 'sensor_data_controls.mat'
+        path_annotations = paths.PATH_ANNOTATIONS_CONTROLS
+
+    if subject in participant_ids.L_TREMOR_IDS:
+        l_other_cols.append(columns.TREMOR_LABEL)
+
+    l_cols_to_export = l_time_cols + l_sensor_cols + l_other_cols
+
+    for side in [descriptives.MOST_AFFECTED_SIDE, descriptives.LEAST_AFFECTED_SIDE]:        
+
+        ## loading_annotations
+        wrist_pos = determine_wrist_pos(subject, side, d_participant_distribution)
+        df_sensors, peakstart, peakend = load_sensor_data(paths.PATH_SENSOR_DATA, file_sensor_data, 'phys', subject, wrist_pos)
+
+        if subject in participant_ids.L_PD_IDS:
+            df_annotations_part_1, df_annotations_part_2 = load_video_annotations(path_annotations, subject)
+            df_annotations = sync_video_annotations(df_annotations_part_1, df_annotations_part_2, peakstart, peakend)
+        else:
+            df_annotations = load_video_annotations(path_annotations, subject)
+
+        df_annotations = preprocess_video_annotations(df=df_annotations, code_label_map=tiers_labels_map, d_tier_rename=tiers_rename)
+        
+        ## merging
+        df_sensors[columns.SIDE] = side
+
+        df_sensors = preprocess_sensor_data(df_sensors)
+
+        df_sensors = attach_label_to_signal(df_sensors, df_annotations, 'label', 'tier', 'start_s', 'end_s')
+
+        if subject in participant_ids.L_PD_IDS:
+            if wrist_pos == descriptives.RIGHT_WRIST:
+                df_sensors[columns.ARM_LABEL] = df_sensors['right_arm_label']
+            else:
+                df_sensors[columns.ARM_LABEL] = df_sensors['left_arm_label']
+
+            df_sensors[columns.ARM_LABEL] = df_sensors[columns.ARM_LABEL].fillna('non_gait')
+
+        df_sensors = determine_med_stage(df=df_sensors, subject=subject,
+                                         watch_side=side,
+                                         path_annotations=path_annotations)
+        
+        df_sensors = rotate_axes(df=df_sensors, subject=subject, wrist=wrist_pos)
+
+        df_sensors = df_sensors.loc[~df_sensors[columns.FREE_LIVING_LABEL].isna()]
+        df_sensors = df_sensors.loc[df_sensors[columns.FREE_LIVING_LABEL]!='Unknown']
+        df_sensors = df_sensors.reset_index(drop=True)
+
+        
+
+        l_drop_cols = ['clinical_tests_label']
+        if subject in participant_ids.L_PD_IDS:
+            l_drop_cols += ['med_and_motor_status_label', 'left_arm_label', 'right_arm_label']
+
+        df_sensors = df_sensors.drop(columns=l_drop_cols)
+
+        # temporarily store as pickle until tsdf issue is resolved
+        df_sensors[l_cols_to_export].to_pickle(os.path.join(paths.PATH_DATAFRAMES, f'{subject}_{side}.pkl'))
 
 
 def preprocess_gait(subject, side, path_input=paths.PATH_DATAFRAMES, path_output=paths.PATH_GAIT_FEATURES):
-    print(f"Time {datetime.datetime.now()} - {subject} {side} - Processing ...")
+    print(f"Time {datetime.datetime.now()} - {subject} {side} - Preprocessing gait ...")
     df = pd.read_pickle(os.path.join(path_input, f'{subject}_{side}.pkl'))
 
     config = IMUPreprocessingConfig()
@@ -114,14 +188,14 @@ def preprocess_gait(subject, side, path_input=paths.PATH_DATAFRAMES, path_output
 
 
 def determine_wrist_pos(subject, watch_side, d_participant_distribution):
-    if watch_side == descriptives.MOST_AFFECTED_SIDE and subject in d_participant_distribution[descriptives.MOST_AFFECTED_SIDE]['right']:
-        return descriptives.descriptives.RIGHT_WRIST
-    elif watch_side == descriptives.MOST_AFFECTED_SIDE and subject in d_participant_distribution[descriptives.MOST_AFFECTED_SIDE]['left']:
-        return descriptives.descriptives.LEFT_WRIST
-    elif watch_side == descriptives.LEAST_AFFECTED_SIDE and subject in d_participant_distribution[descriptives.LEAST_AFFECTED_SIDE]['right']:
-        return descriptives.descriptives.RIGHT_WRIST
+    if watch_side == descriptives.MOST_AFFECTED_SIDE and subject in d_participant_distribution['most_affected']['right']:
+        return descriptives.RIGHT_WRIST
+    elif watch_side == descriptives.MOST_AFFECTED_SIDE and subject in d_participant_distribution['most_affected']['left']:
+        return descriptives.LEFT_WRIST
+    elif watch_side == descriptives.LEAST_AFFECTED_SIDE and subject in d_participant_distribution['least_affected']['right']:
+        return descriptives.RIGHT_WRIST
     else:
-        return descriptives.descriptives.LEFT_WRIST
+        return descriptives.LEFT_WRIST
     
 
 def sync_video_annotations(df_annotations_part_1, df_annotations_part_2, peakstart, peakend):
@@ -144,24 +218,25 @@ def sync_video_annotations(df_annotations_part_1, df_annotations_part_2, peaksta
     return df_annotations
 
 
-def preprocess_video_annotations(df, d_labels, d_tiers):  
-    for tier in d_labels:
+def preprocess_video_annotations(df, code_label_map, d_tier_rename):  
+    for tier in code_label_map:
         if tier == 'Arm':
-            df.loc[df['tier']=='Left arm', 'label'] = df.loc[df['tier']=='Left arm', 'code'].map(d_labels[tier])
-            df.loc[df['tier']=='Right arm', 'label'] = df.loc[df['tier']=='Right arm', 'code'].map(d_labels[tier])
+            df.loc[df['tier']=='Left arm', 'label'] = df.loc[df['tier']=='Left arm', 'code'].map(code_label_map[tier])
+            df.loc[df['tier']=='Right arm', 'label'] = df.loc[df['tier']=='Right arm', 'code'].map(code_label_map[tier])
         else:
-            df.loc[df['tier']==tier, 'label'] = df.loc[df['tier']==tier, 'code'].map(d_labels[tier])
+            df.loc[df['tier']==tier, 'label'] = df.loc[df['tier']==tier, 'code'].map(code_label_map[tier])
 
     if 'start' in df.columns:
         for moment in ['start', 'end']:
             df[moment+'_s'] = df[moment].copy()
 
-    df['tier'] = df['tier'].map(d_tiers)
+    df['tier'] = df['tier'].map(d_tier_rename)
 
     df = df.drop(columns=['start', 'end'])
 
     # remove nan tier, which is used for setting up and synchronizing the devices
     df = df.loc[~df['tier'].isna()] 
+
 
     return df
 
@@ -174,7 +249,7 @@ def preprocess_sensor_data(df_sensors):
     df_sensors = df_sensors.drop(columns=[columns.TIME+'_dt', columns.TIME+'_s'])
     df_sensors[columns.TIME] = df_sensors[columns.TIME] - df_sensors[columns.TIME].min()    
 
-    for col in columns.L_ACCEL_COLS:
+    for col in columns.L_ACCELEROMETER:
         cs = CubicSpline(
             df_sensors.loc[
                 df_sensors[col].isna()==False,
@@ -220,7 +295,7 @@ def determine_med_stage(df, subject, watch_side, path_annotations):
     if subject == 'hbv051' and watch_side == descriptives.MOST_AFFECTED_SIDE:
         df = df.loc[df[columns.TIME]>=5491.138] 
 
-    df['pre_or_post'] = df.apply(lambda x: 'pre' if x[columns.TIME] >= prestart and x[columns.TIME] <= preend else 
+    df[columns.PRE_OR_POST] = df.apply(lambda x: 'pre' if x[columns.TIME] >= prestart and x[columns.TIME] <= preend else 
                                         'post' if x[columns.TIME] >= poststart and x[columns.TIME] <= postend else
                                         np.nan, axis=1)
     

@@ -113,34 +113,6 @@ class Parameters:
     SEGMENT_GAP_GAIT: float
     SEGMENT_GAP_ARM_ACTIVITY: float
 
-@dataclass(frozen=True)
-class LabelsMap:
-    GENERAL_PROTOCOL_STRUCTURE: dict
-    MOBILITY_STATES: dict
-    CLINICAL_TESTS: dict
-    MEDICATION_AND_MOTOR_STATUS: dict
-    TREMOR_ARM: dict
-    ARM: dict
-
-@dataclass(frozen=True)
-class LabelsRename:
-    ARM_ACTIVITY: dict
-
-@dataclass(frozen=True)
-class TiersMap:
-    MOBILITY_STATES_TIER: str
-    CLINICAL_TESTS_TIER: str
-    MEDICATION_AND_MOTOR_STATUS_TIER: str
-    TREMOR_TIER: str
-    LEFT_ARM_TIER: str
-    RIGHT_ARM_TIER: str
-
-@dataclass(frozen=True)
-class UpdrsPart3Mapping:
-    D_UPDRS_PART_3_MAPPING: dict
-    D_UPDRS_PART_3_HYPOKINESIA_MAPPING: dict
-    D_UPDRS_PPP_SCORING: dict
-
 # Instantiate objects
 paths = Paths.from_env()
 columns = Columns(
@@ -242,8 +214,8 @@ parameters = Parameters(
     SEGMENT_GAP_ARM_ACTIVITY=1.5
 )
 
-labels = LabelsMap(
-    GENERAL_PROTOCOL_STRUCTURE={
+tiers_labels_map = {
+    'General protocol structure' : {
         1.0: 'Start synchronization of sensors',
         2.0: 'Installation of sensors',
         3.0: 'Motor examination (in OFF state)',
@@ -254,7 +226,7 @@ labels = LabelsMap(
         8.0: 'Taking off sensors',
         9.0: 'End synchronization of sensors',
     },
-    MOBILITY_STATES={
+    'Mobility states during free living parts and questionnaires' : {
         1.0: 'Sitting',
         2.0: 'Standing',
         3.0: 'Walking',
@@ -279,7 +251,7 @@ labels = LabelsMap(
         13.0: 'Doing push-up exercises',
         99.0: 'Unknown',
     },
-    CLINICAL_TESTS={
+    'Clinical tests during motor examination parts' : {
         1.1: 'Finger tapping left hand',
         1.2: 'Finger tapping right hand',
         2.1: 'Opening and closing left hand',
@@ -299,12 +271,12 @@ labels = LabelsMap(
         10.1: 'Kinetic tremor left hand',
         10.2: 'Kinetic tremor right hand',
     },
-    MEDICATION_AND_MOTOR_STATUS={
+    'Medication intake and motor status of the patient: On and OFF' : {
         1.0: 'Medication intake',
         2.0: 'ON state',
         3.0: 'OFF state',
     },
-    TREMOR_ARM={
+    'Tremor arm' : {
         99.0: 'Not assessable for more than 3 consecutive seconds',
         98.0: 'No tremor with significant upper limb activity',
         97.0: 'Tremor with significant upper limb activity',
@@ -314,7 +286,7 @@ labels = LabelsMap(
         1.0: 'Slight or mild tremor',
         0.0: 'No tremor'
     },
-    ARM={
+    'Arm': {
         1.0: 'Gait without other behaviours or other positions',
         2.0: 'Point at something / waving (raising hand)',
         3.0: 'Making hand gestures other than pointing',
@@ -380,150 +352,132 @@ labels = LabelsMap(
         100.0: 'Cannot assess',
         101.0: 'Cannot assess'
     }
-)
+}
 
-tiers_map = TiersMap(
-    MOBILITY_STATES_TIER='free_living',
-    CLINICAL_TESTS_TIER='clinical_tests',
-    MEDICATION_AND_MOTOR_STATUS_TIER='med_and_motor_status',
-    TREMOR_TIER='tremor',
-    LEFT_ARM_TIER='left_arm',
-    RIGHT_ARM_TIER='right_arm'
-)
+tiers_rename = {
+    'Mobility states during free living parts and questionnaires' : 'free_living',
+    'Clinical tests during motor examination parts': 'clinical_tests',
+    'Medication intake and motor status of the patient: On and OFF' : 'med_and_motor_status',
+    'Tremor arm' : 'tremor',
+    'Left arm' : 'left_arm',
+    'Right arm' : 'right_arm'
+}
 
-updrs_map = UpdrsPart3Mapping(
-    D_UPDRS_PART_3_MAPPING = {
-        'right': {
-            'hypokinesia': {
-                'UPDRS_3_3b': 'Rigidity RUE',
-                'UPDRS_3_3d': 'Rigidity RLE',
-                'UPDRS_3_4a': 'FT RH',
-                'UPDRS_3_5a': 'Movement RH',
-                'UPDRS_3_6a': 'P-S RH',
-                'UPDRS_3_7a': 'TT RF',
-                'UPDRS_3_8a': 'LA RL',
-            },
-            'tremor': {
-                'UPDRS_3_15a': 'Postural tremor amplitude RA',
-                'UPDRS_3_16a': 'Kinetic tremor amplitude RA',
-                'UPDRS_3_17a': 'Rest tremor amplitude RA',
-                'UPDRS_3_17c': 'Rest tremor amplitude RL',
-            }
+arm_labels_rename = {
+    'Gait without other behaviours or other positions': 'Gait without other arm movements',
+    'Grabbing an object (other than 7) / putting something down': 'Grabbing',
+    'Closing by grabbing (door, window, fridge)': 'Closing by pulling',
+    'Closing by throwing, pushing back (door, window, fridge)': 'Closing by pushing',
+    'Hanging up / picking up object high': 'Grabbing high',
+    'Holding an object in forward position (this includes the whole behaviour including grabbing the object) (*Sometimes people hold their hands forward when walking)': 'Holding forward',
+    'Holding an object in downward position (e.g., a book) (this includes the whole behaviour including grabbing the object)': 'Holding downward',
+    'Holding hands in front (lijkt op 4)': 'Hands forward',
+    'Making hand gestures other than pointing': 'Making hand gestures',
+    'Opening by grabbing (door, window, fridge, cabinet)': 'Opening by pulling',
+    'Point at something / waving (raising hand)': 'Pointing',
+    'Using hand for support in downward position (e.g. sitting down in chair, kitchen counter, holding bike saddle) - including grabbing': 'Using hand for support',
+    'Using hand for support in upward position (e.g. holding wall, door, bike steering wheel) - including grabbing': 'Using hand for support',
+    'Fixing clothes': 'Fixing clothes',
+    'Fixing devices': 'Fixing devices',
+    'cant assess': 'Cant assess',
+    'Touching face': 'Touching face',
+    'Transition to/from sitting down': 'Transition',
+    'Grabbing phone or similar object from pocket': 'Grabbing from pocket',
+    'Calling with phone': 'Calling with phone',
+    'Using the phones touchscreen': 'Using phone touchscreen',
+    'Holding hands behind back': 'Hand behind back',
+    'Hand in front trouser pocket': 'Hand in front trouser pocket',
+    'Hand in jacket pocket': 'Hand in jacket pocket',
+    'Washing hand': 'Washing hand',
+    'Patting pet': 'Patting pet',
+    'Putting on jacket arms': 'Putting on jacket',
+    'Turning on/off lights': 'Turning on/off lights',
+    'Putting on jacket shoulders': 'Putting on jacket',
+    'Opening high (cupboard)': 'Opening by pulling',
+    'Taking off jacket (zipping, pulling off shoulders, etc.)': 'Taking off jacket',
+    'Hand on waist': 'Hand on waist',
+    'Mowing lawn': 'Mowing lawn',
+    'Picking something up from the floor / object low': 'Grabbing',
+    'Hand on chest': 'Hand on chest',
+    'Rubbing hands / moving hands high frequency in front op body / stirring bowl': 'Holding forward and rotating',
+    'Closing high (cupboard)': 'Closing by pushing',
+    'Dog leash': 'Holding dog leash',
+    'Hanging up / picking up object high': 'Grabbing',
+    'Hands on pockets': 'Hand on trouser pocket',
+    'Hands folded across': 'Hands folded across',
+    'Hanging clothes on chair (e.g., jacket)': 'Grabbing',
+    'Pulling chair backward': 'Pulling backward',
+    'Untieing / putting on dog leash': 'Putting on dog leash',
+    'Pushing chair forward': 'Pushing forward',
+    'Carrying large object (e.g., chair)': 'Holding forward',
+    'Opening by pushing forward': 'Opening by pushing',
+    'Holding an object behind': 'Hand behind back',
+    'Vacuum cleaning': 'Vacuum cleaning',
+    'Brushing teeth': 'Brushing teeth',
+    'Holding an object forward + moving around object': 'Holding forward and rotating',
+    'Pulling object behind (e.g., trash container)': 'Pulling behind back',
+    'Running / hurrying': 'Running',
+    'Taking off jacket - pulling off shoulders': 'Taking off jacket',
+    'Hand on butt': 'Hand in back pocket',
+    'Hand clasped in front': 'Hand clasped in front',
+    'Walking downstairs': 'Walking stairs',
+    'Make bed': 'Making bed',
+    'Scratching back': 'Scratching back',
+    'Cleaning with cloth (kitchen, table)': 'Cleaning with cloth',
+    'With walking stick': 'Using walking stick',
+    'Taking off jacket - arm': 'Taking off jacket',
+    'Assisting other arm / hand (e.g., when grabbing something from pocket)': 'Holding forward',
+    'Holding an object to chest, as if cuddling': 'Hand on chest',
+    'Transition to/from sitting down': 'Transition',
+    'non_gait': 'Not gait'
+}
+
+updrs_3_map = {
+    'right': {
+        'hypokinesia': {
+            'UPDRS_3_3b': 'Rigidity RUE',
+            'UPDRS_3_3d': 'Rigidity RLE',
+            'UPDRS_3_4a': 'FT RH',
+            'UPDRS_3_5a': 'Movement RH',
+            'UPDRS_3_6a': 'P-S RH',
+            'UPDRS_3_7a': 'TT RF',
+            'UPDRS_3_8a': 'LA RL',
         },
-        'left': {
-            'hypokinesia': {
-                'UPDRS_3_3c': 'Rigidity LUE',
-                'UPDRS_3_3e': 'Rigidity LLE',
-                'UPDRS_3_4b': 'FT LH',
-                'UPDRS_3_5b': 'Movement LH',
-                'UPDRS_3_6b': 'P-S LH',
-                'UPDRS_3_7b': 'TT LF',
-                'UPDRS_3_8b': 'LA LL',
-            },
-            'tremor': {
-                'UPDRS_3_15b': 'Postural tremor amplitude LA',
-                'UPDRS_3_16b': 'Kinetic tremor amplitude LA',
-                'UPDRS_3_17b': 'Rest tremor amplitude LA',
-                'UPDRS_3_17d': 'Rest tremor amplitude LL',
-            }
+        'tremor': {
+            'UPDRS_3_15a': 'Postural tremor amplitude RA',
+            'UPDRS_3_16a': 'Kinetic tremor amplitude RA',
+            'UPDRS_3_17a': 'Rest tremor amplitude RA',
+            'UPDRS_3_17c': 'Rest tremor amplitude RL',
         }
     },
-    D_UPDRS_PART_3_HYPOKINESIA_MAPPING = {
-        'UPDRS_3_3b': 'Rigidity RUE',
-        'UPDRS_3_3c': 'Rigidity LUE',
-        'UPDRS_3_3d': 'Rigidity RLE',
-        'UPDRS_3_3e': 'Rigidity LLE',
-        'UPDRS_3_4a': 'FT RH',
-        'UPDRS_3_4b': 'FT LH',
-        'UPDRS_3_5a': 'Movement RH',
-        'UPDRS_3_5b': 'Movement LH',
-        'UPDRS_3_6a': 'P-S RH',
-        'UPDRS_3_6b': 'P-S LH',
-        'UPDRS_3_7a': 'TT RF',
-        'UPDRS_3_7b': 'TT LF',
-        'UPDRS_3_8a': 'LA RL',
-        'UPDRS_3_8b': 'LA LL',
-    }, 
-    D_UPDRS_PPP_SCORING = {
-        med_stage: {
-            'hypokinesia': {
-                'right_side': [f'Up3{med_stage}RigRue', f'Up3{med_stage}RigRle'],
-                'left_side': [f'Up3{med_stage}RigLle', f'Up3{med_stage}RigLue'],
-                'watch_side': [f'Up3{med_stage}LAgiYesDev', f'Up3{med_stage}FiTaYesDev', f'Up3{med_stage}ToTaYesDev', f'Up3{med_stage}ProSYesDev', f'Up3{med_stage}HaMoYesDev'],
-                'non_watch_side': [f'Up3{med_stage}HaMoNonDev', f'Up3{med_stage}LAgiNonDev', f'Up3{med_stage}ToTaNonDev', f'Up3{med_stage}FiTaNonDev', f'Up3{med_stage}ProSNonDev']
-            },
-            'other': [f'Up3{med_stage}Gait', f'Up3{med_stage}Facial', f'Up3{med_stage}RigNec', f'Up3{med_stage}Speech', f'Up3{med_stage}Arise']
-        } for med_stage in ['Of', 'On']
+    'left': {
+        'hypokinesia': {
+            'UPDRS_3_3c': 'Rigidity LUE',
+            'UPDRS_3_3e': 'Rigidity LLE',
+            'UPDRS_3_4b': 'FT LH',
+            'UPDRS_3_5b': 'Movement LH',
+            'UPDRS_3_6b': 'P-S LH',
+            'UPDRS_3_7b': 'TT LF',
+            'UPDRS_3_8b': 'LA LL',
+        },
+        'tremor': {
+            'UPDRS_3_15b': 'Postural tremor amplitude LA',
+            'UPDRS_3_16b': 'Kinetic tremor amplitude LA',
+            'UPDRS_3_17b': 'Rest tremor amplitude LA',
+            'UPDRS_3_17d': 'Rest tremor amplitude LL',
+        }
     }
-)
+}
 
-labels_rename = LabelsRename(
-    ARM_ACTIVITY = {
-        'Gait without other behaviours or other positions': 'Gait without other arm movements',
-        'Grabbing an object (other than 7) / putting something down': 'Grabbing',
-        'Closing by grabbing (door, window, fridge)': 'Closing by pulling',
-        'Closing by throwing, pushing back (door, window, fridge)': 'Closing by pushing',
-        'Hanging up / picking up object high': 'Grabbing high',
-        'Holding an object in forward position (this includes the whole behaviour including grabbing the object) (*Sometimes people hold their hands forward when walking)': 'Holding forward',
-        'Holding an object in downward position (e.g., a book) (this includes the whole behaviour including grabbing the object)': 'Holding downward',
-        'Holding hands in front (lijkt op 4)': 'Hands forward',
-        'Making hand gestures other than pointing': 'Making hand gestures',
-        'Opening by grabbing (door, window, fridge, cabinet)': 'Opening by pulling',
-        'Point at something / waving (raising hand)': 'Pointing',
-        'Using hand for support in downward position (e.g. sitting down in chair, kitchen counter, holding bike saddle) - including grabbing': 'Using hand for support',
-        'Using hand for support in upward position (e.g. holding wall, door, bike steering wheel) - including grabbing': 'Using hand for support',
-        'Fixing clothes': 'Fixing clothes',
-        'Fixing devices': 'Fixing devices',
-        'cant assess': 'Cant assess',
-        'Touching face': 'Touching face',
-        'Transition to/from sitting down': 'Transition',
-        'Grabbing phone or similar object from pocket': 'Grabbing from pocket',
-        'Calling with phone': 'Calling with phone',
-        'Using the phones touchscreen': 'Using phone touchscreen',
-        'Holding hands behind back': 'Hand behind back',
-        'Hand in front trouser pocket': 'Hand in front trouser pocket',
-        'Hand in jacket pocket': 'Hand in jacket pocket',
-        'Washing hand': 'Washing hand',
-        'Patting pet': 'Patting pet',
-        'Putting on jacket arms': 'Putting on jacket',
-        'Turning on/off lights': 'Turning on/off lights',
-        'Putting on jacket shoulders': 'Putting on jacket',
-        'Opening high (cupboard)': 'Opening by pulling',
-        'Taking off jacket (zipping, pulling off shoulders, etc.)': 'Taking off jacket',
-        'Hand on waist': 'Hand on waist',
-        'Mowing lawn': 'Mowing lawn',
-        'Picking something up from the floor / object low': 'Grabbing',
-        'Hand on chest': 'Hand on chest',
-        'Rubbing hands / moving hands high frequency in front op body / stirring bowl': 'Holding forward and rotating',
-        'Closing high (cupboard)': 'Closing by pushing',
-        'Dog leash': 'Holding dog leash',
-        'Hanging up / picking up object high': 'Grabbing',
-        'Hands on pockets': 'Hand on trouser pocket',
-        'Hands folded across': 'Hands folded across',
-        'Hanging clothes on chair (e.g., jacket)': 'Grabbing',
-        'Pulling chair backward': 'Pulling backward',
-        'Untieing / putting on dog leash': 'Putting on dog leash',
-        'Pushing chair forward': 'Pushing forward',
-        'Carrying large object (e.g., chair)': 'Holding forward',
-        'Opening by pushing forward': 'Opening by pushing',
-        'Holding an object behind': 'Hand behind back',
-        'Vacuum cleaning': 'Vacuum cleaning',
-        'Brushing teeth': 'Brushing teeth',
-        'Holding an object forward + moving around object': 'Holding forward and rotating',
-        'Pulling object behind (e.g., trash container)': 'Pulling behind back',
-        'Running / hurrying': 'Running',
-        'Taking off jacket - pulling off shoulders': 'Taking off jacket',
-        'Hand on butt': 'Hand in back pocket',
-        'Hand clasped in front': 'Hand clasped in front',
-        'Walking downstairs': 'Walking stairs',
-        'Make bed': 'Making bed',
-        'Scratching back': 'Scratching back',
-        'Cleaning with cloth (kitchen, table)': 'Cleaning with cloth',
-        'With walking stick': 'Using walking stick',
-        'Taking off jacket - arm': 'Taking off jacket',
-        'Assisting other arm / hand (e.g., when grabbing something from pocket)': 'Holding forward',
-        'Holding an object to chest, as if cuddling': 'Hand on chest',
-        'Transition to/from sitting down': 'Transition',
-        'non_gait': 'Not gait'
-    },
-)
+d_updrs_scoring_map = {
+    med_stage: {
+        'hypokinesia': {
+            'right_side': [f'Up3{med_stage}RigRue', f'Up3{med_stage}RigRle'],
+            'left_side': [f'Up3{med_stage}RigLle', f'Up3{med_stage}RigLue'],
+            'watch_side': [f'Up3{med_stage}LAgiYesDev', f'Up3{med_stage}FiTaYesDev', f'Up3{med_stage}ToTaYesDev', f'Up3{med_stage}ProSYesDev', f'Up3{med_stage}HaMoYesDev'],
+            'non_watch_side': [f'Up3{med_stage}HaMoNonDev', f'Up3{med_stage}LAgiNonDev', f'Up3{med_stage}ToTaNonDev', f'Up3{med_stage}FiTaNonDev', f'Up3{med_stage}ProSNonDev']
+        },
+        'other': [f'Up3{med_stage}Gait', f'Up3{med_stage}Facial', f'Up3{med_stage}RigNec', f'Up3{med_stage}Speech', f'Up3{med_stage}Arise']
+    } for med_stage in ['Of', 'On']
+}
+
