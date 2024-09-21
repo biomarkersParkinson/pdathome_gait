@@ -4,6 +4,8 @@ import numpy as np
 import os
 import pandas as pd
 
+from typing import Union, List
+
 from collections import Counter
 from scipy.interpolate import CubicSpline
 
@@ -19,6 +21,68 @@ from pdathome.constants import classifiers, columns, descriptives, tiers_labels_
     tiers_rename, parameters, participant_ids, paths
 from pdathome.load import load_stage_start_end, load_sensor_data, load_video_annotations
 from pdathome.utils import save_to_pickle
+
+
+import pandas as pd
+import numpy as np
+
+def window_dataframe_vectorized(df, window_size, step_size, single_value_cols=None, list_value_cols=None, agg_func='mean'):
+    """
+    Efficiently creates a windowed dataframe from the input dataframe using vectorized operations.
+    
+    Args:
+        df (pd.DataFrame): The input dataframe, where each row represents a timestamp (0.01 sec).
+        window_size (int): The number of rows per window (600 for 6 seconds).
+        step_size (int): The number of rows to shift between windows (100 for 1 second shift).
+        single_value_cols (list): List of columns where a single value (e.g., mean) is needed.
+        list_value_cols (list): List of columns where all 600 values should be stored in a list.
+        agg_func (str or function): Aggregation function for single-value columns (e.g., 'mean', 'first').
+        
+    Returns:
+        pd.DataFrame: The windowed dataframe.
+    """
+    # Default single-value columns (you can modify this based on your data)
+    if single_value_cols is None:
+        single_value_cols = ['annotations']  # Example
+    
+    # Default list-value columns (e.g., sensor data)
+    if list_value_cols is None:
+        list_value_cols = ['accelerometer_x', 'accelerometer_y', 'accelerometer_z', 
+                           'gyroscope_x', 'gyroscope_y', 'gyroscope_z']  # Example
+
+    n_rows = len(df)
+    
+    # Create indices for window start positions (0, 100, 200, etc.)
+    window_starts = np.arange(0, n_rows - window_size + 1, step_size)
+    
+    # Prepare the result for the final DataFrame
+    result = []
+    
+    # Handle single value columns with vectorized operations
+    agg_func_map = {
+        'mean': np.mean,
+        'first': lambda x: x[0],
+        # You can add more functions here as needed
+    }
+    
+    agg_func_np = agg_func_map.get(agg_func, agg_func_map['mean'])  # Default to 'mean' if not found
+    
+    for start in window_starts:
+        end = start + window_size
+        window = df.iloc[start:end]
+        
+        # Aggregate single-value columns (e.g., annotations)
+        agg_data = {col: agg_func_np(window[col].values) for col in single_value_cols}
+        
+        # Collect list-value columns efficiently using numpy slicing
+        for col in list_value_cols:
+            agg_data[col] = window[col].values.tolist()
+        
+        result.append(agg_data)
+    
+    # Convert result list into a DataFrame
+    return pd.DataFrame(result)
+
 
 
 def prepare_data(subject):
@@ -112,31 +176,23 @@ def preprocess_gait_detection(subject):
         # Change to correct units [g]
         df[accel_cols] = df[accel_cols] / 9.81 if config.acceleration_units == 'm/s^2' else df[accel_cols]
 
-        # Extract the accelerometer data as a 2D array
-        accel_data = df[accel_cols].values
-
         # Define filtering passbands
         passbands = ['hp', 'lp'] 
-        filtered_data = {}
 
-        # Apply Butterworth filter for each passband and result type
-        for result, passband in zip(['filt', 'grav'], passbands):
-            filtered_data[result] = butterworth_filter(
-                sensor_data=accel_data,
-                order=config.filter_order,
-                cutoff_frequency=config.lower_cutoff_frequency,
-                passband=passband,
-                sampling_frequency=parameters.DOWNSAMPLED_FREQUENCY
-            )
-
-        # Create DataFrames from filtered data
-        filtered_dfs = {f'{result}_{col}': pd.Series(data[:, i]) for i, col in enumerate(accel_cols) for result, data in filtered_data.items()}
-
-        # Combine filtered columns into DataFrame
-        filtered_df = pd.DataFrame(filtered_dfs)
+        # Apply Butterworth filter for each passband
+        for col in accel_cols:
+            for result, passband in zip(['filt', 'grav'], passbands):
+                df[f'{result}_{col}'] = butterworth_filter(
+                    single_sensor_col=np.array(df[col]),
+                    order=config.filter_order,
+                    cutoff_frequency=config.lower_cutoff_frequency,
+                    passband=passband,
+                    sampling_frequency=parameters.DOWNSAMPLED_FREQUENCY
+                )
 
         # Drop original accelerometer columns and append filtered results
-        df = df.drop(columns=accel_cols).join(filtered_df).rename(columns={col: col.replace('filt_', '') for col in filtered_df.columns})
+        df = df.drop(columns=accel_cols).rename(columns={f'filt_{col}': col for col in accel_cols})
+
 
         config = GaitFeatureExtractionConfig()
 
@@ -155,11 +211,12 @@ def preprocess_gait_detection(subject):
 
         df_windowed = tabulate_windows(
                 df=df,
+                window_size=config.window_length_s * parameters.DOWNSAMPLED_FREQUENCY,
+                step_size=config.window_step_size_s * parameters.DOWNSAMPLED_FREQUENCY,
                 time_column_name=columns.TIME,
-                data_point_level_cols=config.l_data_point_level_cols,
-                window_length_s=config.window_length_s,
-                window_step_size_s=config.window_step_size_s,
-                sampling_frequency=parameters.DOWNSAMPLED_FREQUENCY
+                single_value_cols=[columns.PRE_OR_POST],
+                list_value_cols=config.l_data_point_level_cols,
+                agg_fun='first',
         )
         
         # store windows with timestamps for later use
@@ -192,6 +249,8 @@ def preprocess_gait_detection(subject):
             sensor=config.sensor,
             l_sensor_colnames=config.l_accelerometer_cols
         )
+
+        df_windowed.to_pickle(os.path.join(paths.PATH_GAIT_FEATURES, f'{subject}_{side}_tmp.pkl'))
 
         save_to_pickle(
             df=df_windowed[l_export_cols],
@@ -230,31 +289,19 @@ def preprocess_filtering_gait(subject):
         # Change to correct units [g]
         df_sensors[accel_cols] = df_sensors[accel_cols] / 9.81 if imu_config.acceleration_units == 'm/s^2' else df_sensors[accel_cols]
 
-        # Extract the accelerometer data as a 2D array
-        accel_data = df_sensors[accel_cols].values
+        # Apply Butterworth filter for each passband
+        for col in accel_cols:
+            for result, passband in zip(['filt', 'grav'], ['hp', 'lp']):
+                df_sensors[f'{result}_{col}'] = butterworth_filter(
+                    single_sensor_col=np.array(df_sensors[col]),
+                    order=imu_config.filter_order,
+                    cutoff_frequency=imu_config.lower_cutoff_frequency,
+                    passband=passband,
+                    sampling_frequency=imu_config.sampling_frequency
+                )
 
-        # Define filtering passbands
-        passbands = ['hp', 'lp'] 
-        filtered_data = {}
-
-        # Apply Butterworth filter for each passband and result type
-        for result, passband in zip(['filt', 'grav'], passbands):
-            filtered_data[result] = butterworth_filter(
-                sensor_data=accel_data,
-                order=imu_config.filter_order,
-                cutoff_frequency=imu_config.lower_cutoff_frequency,
-                passband=passband,
-                sampling_frequency=imu_config.sampling_frequency
-            )
-
-        # Create DataFrames from filtered data
-        filtered_dfs = {f'{result}_{col}': pd.Series(data[:, i]) for i, col in enumerate(accel_cols) for result, data in filtered_data.items()}
-
-        # Combine filtered columns into DataFrame
-        filtered_df = pd.DataFrame(filtered_dfs)
-
-        # Drop original accelerometer columns and append filtered results
-        df_sensors = df_sensors.drop(columns=accel_cols).join(filtered_df).rename(columns={col: col.replace('filt_', '') for col in filtered_df.columns})
+        # Drop original accelerometer columns
+        df_sensors = df_sensors.drop(columns=accel_cols).rename(columns={f'filt_{col}': col for col in accel_cols})
 
         # Merge sensor data with predictions
         l_merge_cols = [columns.TIME, columns.FREE_LIVING_LABEL]
@@ -300,8 +347,10 @@ def preprocess_filtering_gait(subject):
         df = df[df[columns.PRED_GAIT] == 1].reset_index(drop=True)
 
         # Group consecutive timestamps into segments with new segments starting after a pre-specified gap
-        df[columns.SEGMENT_NR] = create_segments(
-            time_series=df[columns.TIME],
+        df = create_segments(
+            df=df,
+            time_colname=columns.TIME,
+            segment_nr_colname=columns.SEGMENT_NR,
             minimum_gap_s=arm_activity_config.window_length_s
         )
 
@@ -317,7 +366,7 @@ def preprocess_filtering_gait(subject):
         l_data_point_level_cols = arm_activity_config.l_data_point_level_cols + ([columns.PRE_OR_POST, columns.ARM_LABEL] if subject in participant_ids.L_PD_IDS else [])
 
         l_dfs = [
-            tabulate_windows(
+            create_windows_vectorized(
                 df=df[df[columns.SEGMENT_NR] == segment_nr].reset_index(drop=True),
                 time_column_name=columns.TIME,
                 data_point_level_cols=l_data_point_level_cols,
