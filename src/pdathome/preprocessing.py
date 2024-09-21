@@ -26,64 +26,6 @@ from pdathome.utils import save_to_pickle
 import pandas as pd
 import numpy as np
 
-def window_dataframe_vectorized(df, window_size, step_size, single_value_cols=None, list_value_cols=None, agg_func='mean'):
-    """
-    Efficiently creates a windowed dataframe from the input dataframe using vectorized operations.
-    
-    Args:
-        df (pd.DataFrame): The input dataframe, where each row represents a timestamp (0.01 sec).
-        window_size (int): The number of rows per window (600 for 6 seconds).
-        step_size (int): The number of rows to shift between windows (100 for 1 second shift).
-        single_value_cols (list): List of columns where a single value (e.g., mean) is needed.
-        list_value_cols (list): List of columns where all 600 values should be stored in a list.
-        agg_func (str or function): Aggregation function for single-value columns (e.g., 'mean', 'first').
-        
-    Returns:
-        pd.DataFrame: The windowed dataframe.
-    """
-    # Default single-value columns (you can modify this based on your data)
-    if single_value_cols is None:
-        single_value_cols = ['annotations']  # Example
-    
-    # Default list-value columns (e.g., sensor data)
-    if list_value_cols is None:
-        list_value_cols = ['accelerometer_x', 'accelerometer_y', 'accelerometer_z', 
-                           'gyroscope_x', 'gyroscope_y', 'gyroscope_z']  # Example
-
-    n_rows = len(df)
-    
-    # Create indices for window start positions (0, 100, 200, etc.)
-    window_starts = np.arange(0, n_rows - window_size + 1, step_size)
-    
-    # Prepare the result for the final DataFrame
-    result = []
-    
-    # Handle single value columns with vectorized operations
-    agg_func_map = {
-        'mean': np.mean,
-        'first': lambda x: x[0],
-        # You can add more functions here as needed
-    }
-    
-    agg_func_np = agg_func_map.get(agg_func, agg_func_map['mean'])  # Default to 'mean' if not found
-    
-    for start in window_starts:
-        end = start + window_size
-        window = df.iloc[start:end]
-        
-        # Aggregate single-value columns (e.g., annotations)
-        agg_data = {col: agg_func_np(window[col].values) for col in single_value_cols}
-        
-        # Collect list-value columns efficiently using numpy slicing
-        for col in list_value_cols:
-            agg_data[col] = window[col].values.tolist()
-        
-        result.append(agg_data)
-    
-    # Convert result list into a DataFrame
-    return pd.DataFrame(result)
-
-
 
 def prepare_data(subject):
     print(f"Time {datetime.datetime.now()} - {subject} - Preparing data ...")
@@ -216,7 +158,7 @@ def preprocess_gait_detection(subject):
                 time_column_name=columns.TIME,
                 single_value_cols=[columns.PRE_OR_POST],
                 list_value_cols=config.l_data_point_level_cols,
-                agg_fun='first',
+                agg_func='first',
         )
         
         # store windows with timestamps for later use
@@ -229,7 +171,6 @@ def preprocess_gait_detection(subject):
         df_windowed[columns.GAIT_MAJORITY_VOTING] = df_windowed[columns.FREE_LIVING_LABEL].apply(lambda x: x.count('Walking') >= len(x)/2)
 
         if subject in participant_ids.L_PD_IDS:
-            df_windowed[columns.PRE_OR_POST] = df_windowed[columns.PRE_OR_POST].str[0]
             df_windowed[columns.ARM_LABEL_MAJORITY_VOTING] = df_windowed[columns.ARM_LABEL].apply(lambda x: arm_label_majority_voting(config, x))
 
         df_windowed = df_windowed.drop(columns=[x for x in l_ts_cols if x not in [columns.WINDOW_NR, columns.PRE_OR_POST]])
