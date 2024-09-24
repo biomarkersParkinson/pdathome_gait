@@ -38,11 +38,11 @@ def prepare_data(subject):
 
     if subject in participant_ids.L_PD_IDS:
         file_sensor_data = 'phys_cur_PD_merged.mat'
-        path_annotations = paths.PATH_ANNOTATIONS_PD
+        path_annotations = os.path.join(paths.PATH_ANNOTATIONS, 'pd')
         l_other_cols += [columns.ARM_LABEL, columns.PRE_OR_POST]
     else:
         file_sensor_data = 'phys_cur_HC_merged.mat'
-        path_annotations = paths.PATH_ANNOTATIONS_CONTROLS
+        path_annotations = os.path.join(paths.PATH_ANNOTATIONS, 'controls')
 
     if subject in participant_ids.L_TREMOR_IDS:
         l_other_cols.append(columns.TREMOR_LABEL)
@@ -98,7 +98,7 @@ def prepare_data(subject):
         # temporarily store as pickle until tsdf issue is resolved
         save_to_pickle(
             df=df_sensors[l_cols_to_export],
-            path=paths.PATH_DATAFRAMES,
+            path=paths.PATH_PREPARED_DATA,
             filename=f'{subject}_{side}.pkl'
         )
 
@@ -106,7 +106,7 @@ def prepare_data(subject):
 def preprocess_gait_detection(subject):
     for side in [descriptives.MOST_AFFECTED_SIDE, descriptives.LEAST_AFFECTED_SIDE]:
         print(f"Time {datetime.datetime.now()} - {subject} {side} - Preprocessing gait ...")
-        df = pd.read_pickle(os.path.join(paths.PATH_DATAFRAMES, f'{subject}_{side}.pkl'))
+        df = pd.read_pickle(os.path.join(paths.PATH_PREPARED_DATA, f'{subject}_{side}.pkl'))
 
         config = IMUPreprocessingConfig()
         config.acceleration_units = 'g'
@@ -213,7 +213,7 @@ def preprocess_filtering_gait(subject):
             l_cols_to_export = [columns.TIME, columns.SEGMENT_NR, columns.WINDOW_NR]
 
         # Load sensor data
-        df_sensors = pd.read_pickle(os.path.join(paths.PATH_DATAFRAMES, f'{subject}_{side}.pkl'))
+        df_sensors = pd.read_pickle(os.path.join(paths.PATH_PREPARED_DATA, f'{subject}_{side}.pkl'))
         df_pred_side = df_pred.loc[df_pred[columns.SIDE]==side].copy()
 
         imu_config = IMUPreprocessingConfig()
@@ -304,7 +304,11 @@ def preprocess_filtering_gait(subject):
         )
 
         # Create windows of fixed length and step size from the time series
-        l_data_point_level_cols = arm_activity_config.l_data_point_level_cols + ([columns.PRE_OR_POST, columns.ARM_LABEL] if subject in participant_ids.L_PD_IDS else [])
+        l_single_value_cols = [columns.SEGMENT_NR]
+
+        if subject in participant_ids.L_PD_IDS:
+            l_single_value_cols.append(columns.PRE_OR_POST)
+            arm_activity_config.l_data_point_level_cols.append(columns.ARM_LABEL)
 
         l_dfs = [
             tabulate_windows(
@@ -312,8 +316,8 @@ def preprocess_filtering_gait(subject):
                 window_size=int(arm_activity_config.window_length_s * arm_activity_config.sampling_frequency),
                 step_size=int(arm_activity_config.window_step_size_s * arm_activity_config.sampling_frequency),
                 time_column_name=columns.TIME,
-                list_value_cols=l_data_point_level_cols,
-                single_value_cols=[columns.SEGMENT_NR],
+                list_value_cols=arm_activity_config.l_data_point_level_cols,
+                single_value_cols=l_single_value_cols,
             )
             for segment_nr in df[columns.SEGMENT_NR].unique()
         ]
@@ -328,7 +332,6 @@ def preprocess_filtering_gait(subject):
 
         # Majority voting for labels per window
         if subject in participant_ids.L_PD_IDS:
-            df_windowed[columns.PRE_OR_POST] = df_windowed[columns.PRE_OR_POST].str[0]
             df_windowed[columns.OTHER_ARM_ACTIVITY_MAJORITY_VOTING] = df_windowed[columns.ARM_LABEL].apply(lambda x: x.count('Gait without other behaviours or other positions') < len(x)/2)
             df_windowed[columns.ARM_LABEL_MAJORITY_VOTING] = df_windowed[columns.ARM_LABEL].apply(lambda x: arm_label_majority_voting(arm_activity_config, x))
             df_windowed = df_windowed.drop(columns=[columns.ARM_LABEL])
