@@ -222,6 +222,22 @@ parameters = Parameters(
     SEGMENT_GAP_ARM_ACTIVITY=1.5
 )
 
+classifier_hyperparameters = {
+    classifiers.LOGISTIC_REGRESSION: {
+        'penalty': 'l1',
+        'solver': 'saga',
+        'tol': 1e-4,
+        'C': 1e-2,
+        'random_state': 22,
+        'n_jobs': -1
+    },
+    classifiers.RANDOM_FOREST: {
+        'n_estimators': 100,
+        'max_features': 'sqrt',
+        'min_samples_split': 25,
+    }
+}
+
 tiers_labels_map = {
     'General protocol structure' : {
         1.0: 'Start synchronization of sensors',
@@ -377,9 +393,9 @@ arm_labels_rename = {
     'Closing by grabbing (door, window, fridge)': 'Closing by pulling',
     'Closing by throwing, pushing back (door, window, fridge)': 'Closing by pushing',
     'Hanging up / picking up object high': 'Grabbing high',
-    'Holding an object in forward position (this includes the whole behaviour including grabbing the object) (*Sometimes people hold their hands forward when walking)': 'Holding forward',
-    'Holding an object in downward position (e.g., a book) (this includes the whole behaviour including grabbing the object)': 'Holding downward',
-    'Holding hands in front (lijkt op 4)': 'Hands forward',
+    'Holding an object in forward position (including grabbing the object)': 'Holding forward',
+    'Holding an object in downward position (e.g., a book, including grabbing the object)': 'Holding downward',
+    'Holding hands in front (similar to 4)': 'Hands forward',
     'Making hand gestures other than pointing': 'Making hand gestures',
     'Opening by grabbing (door, window, fridge, cabinet)': 'Opening by pulling',
     'Point at something / waving (raising hand)': 'Pointing',
@@ -407,7 +423,7 @@ arm_labels_rename = {
     'Mowing lawn': 'Mowing lawn',
     'Picking something up from the floor / object low': 'Grabbing',
     'Hand on chest': 'Hand on chest',
-    'Rubbing hands / moving hands high frequency in front op body / stirring bowl': 'Holding forward and rotating',
+    'Rubbing hands / moving hands high frequency in front of body / stirring bowl': 'Holding forward and rotating',
     'Closing high (cupboard)': 'Closing by pushing',
     'Dog leash': 'Holding dog leash',
     'Hanging up / picking up object high': 'Grabbing',
@@ -415,7 +431,7 @@ arm_labels_rename = {
     'Hands folded across': 'Hands folded across',
     'Hanging clothes on chair (e.g., jacket)': 'Grabbing',
     'Pulling chair backward': 'Pulling backward',
-    'Untieing / putting on dog leash': 'Putting on dog leash',
+    'Untying / putting on dog leash': 'Putting on dog leash',
     'Pushing chair forward': 'Pushing forward',
     'Carrying large object (e.g., chair)': 'Holding forward',
     'Opening by pushing forward': 'Opening by pushing',
@@ -437,7 +453,8 @@ arm_labels_rename = {
     'Assisting other arm / hand (e.g., when grabbing something from pocket)': 'Holding forward',
     'Holding an object to chest, as if cuddling': 'Hand on chest',
     'Transition to/from sitting down': 'Transition',
-    'non_gait': 'Not gait'
+    'non_gait': 'Not gait',
+    'Cannot assess': 'Cannot assess'
 }
 
 updrs_3_map = {
