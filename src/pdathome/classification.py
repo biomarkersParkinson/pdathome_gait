@@ -8,22 +8,22 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import roc_curve
 from sklearn.preprocessing import StandardScaler
-from typing import Callable
+from typing import Callable, List
 
 from paradigma.gait_analysis_config import GaitFeatureExtractionConfig, ArmSwingFeatureExtractionConfig
 
 from pdathome.constants import classifiers, columns, descriptives, participant_ids, paths
-from pdathome.load import load_dataframes_directory
 from pdathome.utils import save_to_pickle
 
 def classify(
-    subject: str,
+    df_all_subjects: pd.DataFrame,
+    l_test_subjects: List[str],
     config_class: Callable,
     target_column_name: str,
     pred_proba_colname: str,
     pred_colname: str,
     step: str,
-    path_features: str,
+    classifier_bools: dict,
     path_predictions: str
 ):
     # Initialize configuration
@@ -33,94 +33,97 @@ def classify(
     l_predictors = list(config.d_channels_values.keys())
     l_predictors_scale = [x for x in l_predictors if 'dominant' not in x]
 
-    # Load data
-    df_all_subjects = load_dataframes_directory(
-        directory_path=path_features,
-        l_ids=participant_ids.L_PD_IDS + participant_ids.L_HC_IDS
-    )
+    l_classifiers = list(classifier_bools.keys())
 
-    # Lists to store results
-    l_thresholds = []
-    l_importances = []
-
-    for classifier in [classifiers.LOGISTIC_REGRESSION, classifiers.RANDOM_FOREST]:
+    for classifier in l_classifiers:
         print(f"Processing classifier {classifier}")
 
-        # Iterate over subjects and process data
-        for subject in participant_ids.L_PD_IDS + participant_ids.L_HC_IDS:
-            print(f"... Processing subject {subject}")
+        if classifier_bools[classifier]['train_test']:
+            # Lists to store results
+            l_thresholds = []
+            l_importances = []
 
-            # Train and test model
-            df_test, classification_threshold, importances = cv_train_test_model(
-                subject=subject,
+            # Iterate over subjects and process data
+            for subject in l_test_subjects:
+                print(f"... Processing subject {subject}")
+
+                # Train and test model
+                df_test, classification_threshold, importances = cv_train_test_model(
+                    subject=subject,
+                    df=df_all_subjects,
+                    model=classifier,
+                    l_predictors=l_predictors,
+                    l_predictors_scale=l_predictors_scale,
+                    target_column_name=target_column_name,
+                    pred_proba_colname=pred_proba_colname,
+                    pred_colname=pred_colname,
+                    step=step
+                )
+            
+                # Collect thresholds and importances
+                l_thresholds.append(classification_threshold)
+                l_importances.append(importances)
+
+                # Save predictions
+                windows_to_timestamps(
+                    subject=subject, df=df_test,
+                    path_output=os.path.join(path_predictions, classifier),
+                    pred_proba_colname=pred_proba_colname,
+                    step=step
+                )
+
+        if classifier_bools[classifier]['train_test'] and classifier_bools[classifier]['store_output']:
+            
+            # Save average threshold
+            mean_threshold = np.mean(l_thresholds)
+            with open(os.path.join(paths.PATH_THRESHOLDS, step, f'{classifier}_threshold.txt'), 'w') as f:
+                f.write(str(mean_threshold))
+
+            # Save importances
+            with open(os.path.join(paths.PATH_CLASSIFIERS, step, f'{classifier}_importances.txt'), 'w') as f:
+                # Flatten the list of dictionaries and format them
+                all_importances = pd.concat([pd.Series(imp) for imp in l_importances], axis=1).mean(axis=1)
+                for feature, importance in all_importances.items():
+                    f.write(f'{feature}: {importance}\n')
+
+        if classifier_bools[classifier]['store_output']:
+
+            store_model(
                 df=df_all_subjects,
                 model=classifier,
                 l_predictors=l_predictors,
                 l_predictors_scale=l_predictors_scale,
                 target_column_name=target_column_name,
-                pred_proba_colname=pred_proba_colname,
-                pred_colname=pred_colname,
+                path_scalers=paths.PATH_SCALERS,
+                path_classifiers=paths.PATH_CLASSIFIERS,
                 step=step
             )
-        
-            # Collect thresholds and importances
-            l_thresholds.append(classification_threshold)
-            l_importances.append(importances)
-
-            # Save predictions
-            windows_to_timestamps(
-                subject=subject, df=df_test,
-                path_output=os.path.join(path_predictions, classifier),
-                pred_proba_colname=pred_proba_colname,
-                step=step
-            )
-            
-        # Save average threshold
-        mean_threshold = np.mean(l_thresholds)
-        with open(os.path.join(paths.PATH_THRESHOLDS, step, f'{classifier}_threshold.txt'), 'w') as f:
-            f.write(str(mean_threshold))
-
-        # Save importances
-        with open(os.path.join(paths.PATH_CLASSIFIERS, step, f'{classifier}_importances.txt'), 'w') as f:
-            # Flatten the list of dictionaries and format them
-            all_importances = pd.concat([pd.Series(imp) for imp in l_importances], axis=1).mean(axis=1)
-            for feature, importance in all_importances.items():
-                f.write(f'{feature}: {importance}\n')
-
-        store_model(
-            df=df_all_subjects,
-            model=classifier,
-            l_predictors=l_predictors,
-            l_predictors_scale=l_predictors_scale,
-            target_column_name=target_column_name,
-            path_scalers=paths.PATH_SCALERS,
-            path_classifiers=paths.PATH_CLASSIFIERS,
-            step=step
-        )
 
 
-def detect_gait(subject, classifier):
+def detect_gait(df_all_subjects, l_test_subjects, classifier_bools):
     classify(
-        subject=subject,
+        df_all_subjects=df_all_subjects,
+        l_test_subjects=l_test_subjects,
         config_class=GaitFeatureExtractionConfig,
         target_column_name=columns.GAIT_MAJORITY_VOTING,
         pred_proba_colname=columns.PRED_GAIT_PROBA,
         pred_colname=columns.PRED_GAIT,
         step='gait',
-        path_features=paths.PATH_GAIT_FEATURES,
+        classifier_bools=classifier_bools,
         path_predictions=paths.PATH_GAIT_PREDICTIONS
     )
 
 
-def filter_gait(subject, classifier):
+def filter_gait(df_all_subjects, l_test_subjects, classifier_bools):
     classify(
-        subject=subject,
+        df_all_subjects=df_all_subjects,
+        l_test_subjects=l_test_subjects,
         config_class=ArmSwingFeatureExtractionConfig,
         target_column_name=columns.OTHER_ARM_ACTIVITY_MAJORITY_VOTING,
         pred_proba_colname=columns.PRED_OTHER_ARM_ACTIVITY_PROBA,
         pred_colname=columns.PRED_OTHER_ARM_ACTIVITY,
         step='arm_activity',
-        path_features=paths.PATH_ARM_ACTIVITY_FEATURES,
+        classifier_bools=classifier_bools,
         path_predictions=paths.PATH_ARM_ACTIVITY_PREDICTIONS
     )
 
@@ -215,7 +218,7 @@ def windows_to_timestamps(subject, df, path_output, pred_proba_colname, step):
         pd_specific_cols = [columns.PRE_OR_POST, columns.ARM_LABEL]
         l_subj_cols.append(columns.PRE_OR_POST)
         l_groupby_cols += pd_specific_cols
-        l_explode_cols += pd_specific_cols
+        l_explode_cols.append(columns.ARM_LABEL)
         l_merge_ts_cols.append(columns.PRE_OR_POST)
         l_merge_points_cols.append(columns.PRE_OR_POST)
         l_dupl_cols.append(columns.PRE_OR_POST)
@@ -230,11 +233,12 @@ def windows_to_timestamps(subject, df, path_output, pred_proba_colname, step):
         path_features = paths.PATH_ARM_ACTIVITY_FEATURES
 
     # Select relevant columns
-    df = df[l_subj_cols]        
+    df = df[l_subj_cols]     
     
     # Load and combine timestamps data
     df_ts_mas = pd.read_pickle(os.path.join(path_features, f'{subject}_{descriptives.MOST_AFFECTED_SIDE}_ts.pkl')).assign(side=descriptives.MOST_AFFECTED_SIDE)
     df_ts_las = pd.read_pickle(os.path.join(path_features, f'{subject}_{descriptives.LEAST_AFFECTED_SIDE}_ts.pkl')).assign(side=descriptives.LEAST_AFFECTED_SIDE)
+
     df_ts = pd.concat([df_ts_mas, df_ts_las], ignore_index=True)
 
     # Explode timestamp data for merging
@@ -276,10 +280,12 @@ def store_model(df, model, l_predictors, l_predictors_scale, target_column_name,
     scaler = StandardScaler()
     df_pd = df.loc[df[columns.ID].isin(participant_ids.L_PD_IDS), l_predictors_scale]
     df_scaled = df.copy()
-    df_scaled[l_predictors_scale] = scaler.fit_transform(df_pd)
+    
+    scaler.fit(df_pd[l_predictors_scale])
+    df_scaled[l_predictors_scale] = scaler.transform(df_scaled[l_predictors_scale])
 
-    X = df[l_predictors].to_numpy()
-    y = df[target_column_name].astype(int).values
+    X = df_scaled[l_predictors].to_numpy()
+    y = df_scaled[target_column_name].astype(int).values
 
     # train on all subjects and store model
     if model == classifiers.RANDOM_FOREST:
@@ -297,7 +303,7 @@ def store_model(df, model, l_predictors, l_predictors_scale, target_column_name,
     clf.fit(X, y)
 
     # Save the model as a pickle file
-    model_path = os.path.join(path_classifiers, f'clf_{model}.pkl')
+    model_path = os.path.join(path_classifiers, step, f'clf_{model}.pkl')
 
     if not os.path.exists(path_classifiers):
         os.makedirs(path_classifiers)
@@ -312,7 +318,7 @@ def store_model(df, model, l_predictors, l_predictors_scale, target_column_name,
         'scale': scaler.scale_.tolist()
     }
 
-    scaler_path = os.path.join(path_scalers, f'scaler_params_{step}.json')
+    scaler_path = os.path.join(path_scalers, step, f'scaler_params_{step}.json')
 
     if not os.path.exists(path_scalers):
         os.makedirs(path_scalers)
