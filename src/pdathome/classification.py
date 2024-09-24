@@ -14,20 +14,22 @@ from typing import Callable, List
 
 from paradigma.gait_analysis_config import GaitFeatureExtractionConfig, ArmSwingFeatureExtractionConfig
 
-from pdathome.constants import classifiers, columns, descriptives, participant_ids, paths
+from pdathome.constants import classifiers, columns, descriptives, participant_ids, paths, classifier_hyperparameters
+from pdathome.load import load_dataframes_directory
 from pdathome.utils import save_to_pickle
 
 warnings.filterwarnings("ignore", category=ConvergenceWarning)
 
-def classify(
-    df_all_subjects: pd.DataFrame,
-    l_test_subjects: List[str],
+def train_test(
+    subject,
+    l_ids: List[str],
     config_class: Callable,
+    l_classifiers: List[str],
     target_column_name: str,
     pred_proba_colname: str,
     pred_colname: str,
     step: str,
-    classifier_bools: dict,
+    path_features: str,
     path_predictions: str
 ):
     # Initialize configuration
@@ -37,136 +39,71 @@ def classify(
     l_predictors = list(config.d_channels_values.keys())
     l_predictors_scale = [x for x in l_predictors if 'dominant' not in x]
 
-    l_classifiers = list(classifier_bools.keys())
+    df_all_subjects = load_dataframes_directory(
+        directory_path=path_features,
+        l_ids=l_ids
+    )
 
-    for classifier in l_classifiers:
-        if classifier_bools[classifier]['train_test']:
-            print(f"Train-testing {classifier} ...")
-            # Lists to store results
-            l_thresholds = []
-            l_importances = []
+    print(f"... Processing subject {subject} ...")
 
-            # Iterate over subjects and process data
-            for subject in l_test_subjects:
-                print(f"... Processing subject {subject} ...")
+    for classifier_name in l_classifiers:
 
-                # Train and test model
-                df_test, classification_threshold, importances = cv_train_test_model(
-                    subject=subject,
-                    df=df_all_subjects,
-                    model=classifier,
-                    l_predictors=l_predictors,
-                    l_predictors_scale=l_predictors_scale,
-                    target_column_name=target_column_name,
-                    pred_proba_colname=pred_proba_colname,
-                    pred_colname=pred_colname,
-                    step=step
-                )
-            
-                # Collect thresholds and importances
-                l_thresholds.append(classification_threshold)
-                l_importances.append(importances)
+        # Train and test model
+        df_test, classification_threshold = cv_train_test_model(
+            subject=subject,
+            df=df_all_subjects,
+            classifier_name=classifier_name,
+            l_predictors=l_predictors,
+            l_predictors_scale=l_predictors_scale,
+            target_column_name=target_column_name,
+            pred_proba_colname=pred_proba_colname,
+            pred_colname=pred_colname,
+            step=step
+        )
 
-                # Save predictions
-                windows_to_timestamps(
-                    subject=subject, df=df_test,
-                    path_output=os.path.join(path_predictions, classifier),
-                    pred_proba_colname=pred_proba_colname,
-                    step=step
-                )
+        # Save predictions
+        windows_to_timestamps(
+            subject=subject, df=df_test,
+            path_output=os.path.join(path_predictions, classifier_name),
+            pred_proba_colname=pred_proba_colname,
+            step=step
+        )
 
-        if classifier_bools[classifier]['train_test'] and classifier_bools[classifier]['store_output']:
-            print(f"Storing threshold and feature coefficients {classifier} ...")
-            
-            # Save average threshold
-            mean_threshold = np.mean(l_thresholds)
-            with open(os.path.join(paths.PATH_THRESHOLDS, step, f'{classifier}.txt'), 'w') as f:
-                f.write(str(mean_threshold))
-
-            # Save importances
-            with open(os.path.join(paths.PATH_CLASSIFIERS, step, f'{classifier}.txt'), 'w') as f:
-                # Flatten the list of dictionaries and format them
-                all_importances = pd.concat([pd.Series(imp) for imp in l_importances], axis=1).mean(axis=1)
-                for feature, importance in all_importances.items():
-                    f.write(f'{feature}: {importance}\n')
-
-        if classifier_bools[classifier]['store_output']:
-
-            print(f"Storing model and scaler {classifier} ...")
-
-            clf, scaler_params = store_model(
-                df=df_all_subjects,
-                model=classifier,
-                l_predictors=l_predictors,
-                l_predictors_scale=l_predictors_scale,
-                target_column_name=target_column_name,
-                path_scalers=paths.PATH_SCALERS,
-                path_classifiers=paths.PATH_CLASSIFIERS,
-                step=step
-            )
-
-            if step == 'arm_activity':
-
-                print("... Predicting for controls ...")
-
-                scaler = StandardScaler()
-                scaler.mean_ = scaler_params['mean']
-                scaler.var_ = scaler_params['var']
-                scaler.scale_ = scaler_params['scale']
-                scaler.feature_names_in_ = l_predictors_scale
-                
-                # Predict arm activity for the controls
-                for subject in participant_ids.L_HC_IDS:
-                    df_subj_mas = pd.read_pickle(os.path.join(paths.PATH_ARM_ACTIVITY_FEATURES, f'{subject}_{descriptives.MOST_AFFECTED_SIDE}.pkl'))
-                    df_subj_las = pd.read_pickle(os.path.join(paths.PATH_ARM_ACTIVITY_FEATURES, f'{subject}_{descriptives.LEAST_AFFECTED_SIDE}.pkl'))
-                    df_subj_mas['side'] = descriptives.MOST_AFFECTED_SIDE
-                    df_subj_las['side'] = descriptives.LEAST_AFFECTED_SIDE
-                    df_subj = pd.concat([df_subj_mas, df_subj_las]).reset_index(drop=True)
-
-                    df_subj[l_predictors_scale] = scaler.transform(df_subj[l_predictors_scale])
-                    df_subj[pred_proba_colname] = clf.predict_proba(df_subj[l_predictors])[:,1]
-                    df_subj[pred_colname] = clf.predict(df_subj[l_predictors])
-
-                    windows_to_timestamps(
-                        subject=subject, df=df_subj,
-                        path_output=os.path.join(path_predictions, classifier),
-                        pred_proba_colname=pred_proba_colname,
-                        step=step
-                    )
-
-        if classifier_bools[classifier]['train_test'] or classifier_bools[classifier]['store_output']:
-            print(f"Finished {classifier}!")
+        with open(os.path.join(paths.PATH_THRESHOLDS, step, f'{classifier_name}_{subject}.txt'), 'w') as f:
+            f.write(str(classification_threshold))
 
 
-def detect_gait(df_all_subjects, l_test_subjects, classifier_bools):
-    classify(
-        df_all_subjects=df_all_subjects,
-        l_test_subjects=l_test_subjects,
+def train_test_gait_detection(subject, l_classifiers):
+    train_test(
+        subject=subject,
+        l_ids=participant_ids.L_PD_IDS + participant_ids.L_HC_IDS,
         config_class=GaitFeatureExtractionConfig,
+        l_classifiers=l_classifiers,
         target_column_name=columns.GAIT_MAJORITY_VOTING,
         pred_proba_colname=columns.PRED_GAIT_PROBA,
         pred_colname=columns.PRED_GAIT,
         step='gait',
-        classifier_bools=classifier_bools,
+        path_features=paths.PATH_GAIT_FEATURES,
         path_predictions=paths.PATH_GAIT_PREDICTIONS
     )
 
 
-def filter_gait(df_all_subjects, l_test_subjects, classifier_bools):
-    classify(
-        df_all_subjects=df_all_subjects,
-        l_test_subjects=l_test_subjects,
+def train_test_filtering_gait(subject, l_classifiers):
+    train_test(
+        subject=subject,
+        l_ids=participant_ids.L_PD_IDS,
         config_class=ArmSwingFeatureExtractionConfig,
+        l_classifiers=l_classifiers,
         target_column_name=columns.OTHER_ARM_ACTIVITY_MAJORITY_VOTING,
         pred_proba_colname=columns.PRED_OTHER_ARM_ACTIVITY_PROBA,
         pred_colname=columns.PRED_OTHER_ARM_ACTIVITY,
         step='arm_activity',
-        classifier_bools=classifier_bools,
+        path_features=paths.PATH_ARM_ACTIVITY_FEATURES,
         path_predictions=paths.PATH_ARM_ACTIVITY_PREDICTIONS
     )
 
 
-def cv_train_test_model(subject, df, model, l_predictors, l_predictors_scale, target_column_name, 
+def cv_train_test_model(subject, df, classifier_name, l_predictors, l_predictors_scale, target_column_name, 
                         pred_proba_colname, pred_colname, step):
 
     # Check for valid step
@@ -195,15 +132,15 @@ def cv_train_test_model(subject, df, model, l_predictors, l_predictors_scale, ta
     y_test = df_test[target_column_name].astype(int)
 
     # Initialize the model
-    if model == classifiers.RANDOM_FOREST:
+    if classifier_name == classifiers.RANDOM_FOREST:
         clf = RandomForestClassifier(
-            n_estimators=100, max_features='sqrt', min_samples_split=25, max_depth=15,
-            criterion='gini', bootstrap=True, oob_score=True, class_weight=class_weight, random_state=22
+            **classifier_hyperparameters[classifiers.RANDOM_FOREST],
+            class_weight=class_weight
         )
-    elif model == classifiers.LOGISTIC_REGRESSION:
+    elif classifier_name == classifiers.LOGISTIC_REGRESSION:
         clf = LogisticRegression(
-            penalty='l1', solver='saga', tol=1e-4, C=1e-2, class_weight=class_weight,
-            random_state=22, n_jobs=-1
+            **classifier_hyperparameters[classifiers.LOGISTIC_REGRESSION],
+            class_weight=class_weight,
         )
         
     # Train the model
@@ -228,17 +165,8 @@ def cv_train_test_model(subject, df, model, l_predictors, l_predictors_scale, ta
     else:
         df_test[pred_colname] = clf.predict(X_test)
         classification_threshold = df_test.loc[df_test[pred_colname] == 1, pred_proba_colname].min()
-
-    # Feature importance
-    if model == classifiers.RANDOM_FOREST:
-        importances = pd.Series(clf.feature_importances_, index=l_predictors)
-        importances = importances.sort_values(ascending=False)
-        
-    elif model == classifiers.LOGISTIC_REGRESSION:
-        importances = pd.Series(clf.coef_[0], index=l_predictors)
-        importances = importances.sort_values(ascending=False)
     
-    return df_test, classification_threshold, importances
+    return df_test, classification_threshold
 
 
 def windows_to_timestamps(subject, df, path_output, pred_proba_colname, step):
@@ -309,47 +237,88 @@ def windows_to_timestamps(subject, df, path_output, pred_proba_colname, step):
     )
 
 
-def store_model(df, model, l_predictors, l_predictors_scale, target_column_name, path_scalers, path_classifiers, step):
+def store_model_output(df, step):
     if step not in ['gait', 'arm_activity']:
         raise ValueError("Step not recognized")
     
     # Determine class weight based on the step
-    class_weight = None if step == 'gait' else 'balanced'
+    if step == 'gait':
+        class_weight = None
+        target_column_name = columns.GAIT_MAJORITY_VOTING
+        config = GaitFeatureExtractionConfig()
+    else:
+        class_weight = 'balanced'
+        target_column_name = columns.OTHER_ARM_ACTIVITY_MAJORITY_VOTING
+        config = ArmSwingFeatureExtractionConfig()
+
+    l_predictors = list(config.d_channels_values.keys())
+    l_predictors_scaled = [x for x in l_predictors if 'dominant' not in x]
 
     # Standardize features based on the PD subjects    
     scaler = StandardScaler()
-    df_pd = df.loc[df[columns.ID].isin(participant_ids.L_PD_IDS), l_predictors_scale]
+    df_pd = df.loc[df[columns.ID].isin(participant_ids.L_PD_IDS), l_predictors_scaled]
     df_scaled = df.copy()
     
-    scaler.fit(df_pd[l_predictors_scale])
-    df_scaled[l_predictors_scale] = scaler.transform(df_scaled[l_predictors_scale])
+    scaler.fit(df_pd[l_predictors_scaled])
+    df_scaled[l_predictors_scaled] = scaler.transform(df_scaled[l_predictors_scaled])
 
     X = df_scaled[l_predictors]
     y = df_scaled[target_column_name].astype(int)
 
-    # train on all subjects and store model
-    if model == classifiers.RANDOM_FOREST:
-        clf = RandomForestClassifier(
-            n_estimators=100, max_features='sqrt', min_samples_split=25, max_depth=15,
-            criterion='gini', bootstrap=True, oob_score=True, class_weight=class_weight, random_state=22
-        )
-    elif model == classifiers.LOGISTIC_REGRESSION:
-        clf = LogisticRegression(
-            penalty='l1', solver='saga', tol=1e-4, C=1e-2, class_weight=class_weight,
-            random_state=22, n_jobs=-1
-        )
+    for classifier_name in [classifiers.LOGISTIC_REGRESSION, classifiers.RANDOM_FOREST]:
 
-    # Fit the model
-    clf.fit(X, y)
+        # train on all subjects and store model
+        if classifier_name == classifiers.RANDOM_FOREST:
+            clf = RandomForestClassifier(
+                **classifier_hyperparameters[classifiers.RANDOM_FOREST],
+                class_weight=class_weight
+            )
+        elif classifier_name == classifiers.LOGISTIC_REGRESSION:
+            clf = LogisticRegression(
+                **classifier_hyperparameters[classifiers.LOGISTIC_REGRESSION],
+                class_weight=class_weight,
+            )
 
-    # Save the model as a pickle file
-    model_path = os.path.join(path_classifiers, step, f'{model}.pkl')
+        # Fit the model
+        clf.fit(X, y)
 
-    if not os.path.exists(path_classifiers):
-        os.makedirs(path_classifiers)
+        # Save the model as a pickle file
+        model_path = os.path.join(paths.PATH_CLASSIFIERS, step, f'{classifier_name}.pkl')
 
-    with open(model_path, 'wb') as f:
-        pickle.dump(clf, f)
+        if not os.path.exists(paths.PATH_CLASSIFIERS):
+            os.makedirs(paths.PATH_CLASSIFIERS)
+
+        with open(model_path, 'wb') as f:
+            pickle.dump(clf, f)
+
+        # Save coefficients as json
+        with open(os.path.join(paths.PATH_COEFFICIENTS, step, f'{classifier_name}.json'), 'w') as f:
+            if type(clf).__name__.lower() == 'logisticregression': 
+                coefficients = {k: v for k, v in zip(l_predictors, clf.coef_[0])}
+            elif type(clf).__name__.lower() == 'randomforestclassifier':
+                coefficients = {k: v for k, v in zip(l_predictors, clf.feature_importances_)}
+            
+            json.dump(coefficients, f, indent=4)
+
+        # Load individual thresholds and store the mean
+        thresholds = []
+        
+        if step == 'gait':
+            l_ids = participant_ids.L_PD_IDS + participant_ids.L_HC_IDS
+        else:
+            l_ids = participant_ids.L_PD_IDS 
+
+        for subject in l_ids:
+            with open(os.path.join(paths.PATH_THRESHOLDS, step, f'{classifier_name}_{subject}.txt'), 'r') as f:
+                thresholds.append(float(f.read()))
+
+        mean_threshold = np.mean(thresholds)
+        with open(os.path.join(paths.PATH_THRESHOLDS, step, f'{classifier_name}.txt'), 'w') as f:
+            f.write(str(mean_threshold))
+
+        # Delete individual thresholds
+        for subject in l_ids:
+            os.remove(os.path.join(paths.PATH_THRESHOLDS, step, f'{classifier_name}_{subject}.txt')) 
 
     # Save the scaler parameters as JSON
     scaler_params = {
@@ -358,14 +327,59 @@ def store_model(df, model, l_predictors, l_predictors_scale, target_column_name,
         'scale': scaler.scale_.tolist()
     }
 
-    scaler_path = os.path.join(path_scalers, step, f'scaler_params.json')
+    scaler_path = os.path.join(paths.PATH_SCALERS, step, f'scaler_params.json')
 
-    if not os.path.exists(path_scalers):
-        os.makedirs(path_scalers)
+    if not os.path.exists(paths.PATH_SCALERS):
+        os.makedirs(paths.PATH_SCALERS)
         
     with open(scaler_path, 'w') as f:
         json.dump(scaler_params, f)
 
-    print(f'Model and scaler stored successfully for {step}.')
+    if step == 'arm_activity':       
+        # Predict arm activity for the controls
+        predict_controls(clf, scaler, classifier_name, l_predictors, l_predictors_scaled, step)
 
-    return clf, scaler_params
+
+def predict_controls(clf, scaler, classifier_name, l_predictors, l_predictors_scaled, step):
+    for subject in participant_ids.L_HC_IDS:
+        df_subj_mas = pd.read_pickle(os.path.join(paths.PATH_ARM_ACTIVITY_FEATURES, f'{subject}_{descriptives.MOST_AFFECTED_SIDE}.pkl'))
+        df_subj_las = pd.read_pickle(os.path.join(paths.PATH_ARM_ACTIVITY_FEATURES, f'{subject}_{descriptives.LEAST_AFFECTED_SIDE}.pkl'))
+        df_subj_mas['side'] = descriptives.MOST_AFFECTED_SIDE
+        df_subj_las['side'] = descriptives.LEAST_AFFECTED_SIDE
+        df_subj = pd.concat([df_subj_mas, df_subj_las]).reset_index(drop=True)
+
+        df_subj[l_predictors_scaled] = scaler.transform(df_subj[l_predictors_scaled])
+        df_subj[columns.PRED_OTHER_ARM_ACTIVITY_PROBA] = clf.predict_proba(df_subj[l_predictors])[:,1]
+        df_subj[columns.PRED_OTHER_ARM_ACTIVITY] = clf.predict(df_subj[l_predictors])
+
+        windows_to_timestamps(
+            subject=subject, df=df_subj,
+            path_output=os.path.join(paths.PATH_ARM_ACTIVITY_PREDICTIONS, classifier_name),
+            pred_proba_colname=columns.PRED_OTHER_ARM_ACTIVITY_PROBA,
+            step=step
+        )
+
+
+def store_gait_detection(classifier):
+    df = load_dataframes_directory(
+        directory_path=paths.PATH_GAIT_FEATURES,
+        l_ids=participant_ids.L_PD_IDS + participant_ids.L_HC_IDS
+    )
+
+    store_model_output(
+        df=df,
+        classifier=classifier,
+        step='gait',
+    )
+
+
+def store_filtering_gait(classifier):
+    df = load_dataframes_directory(
+        directory_path=paths.PATH_ARM_ACTIVITY_FEATURES,
+        l_ids=participant_ids.L_PD_IDS
+    )
+
+    store_model_output(
+        df=df,
+        step='arm_activity'
+    )

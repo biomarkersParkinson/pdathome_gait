@@ -16,3 +16,12 @@ def save_to_pickle(df, path, filename):
     # Save the DataFrame to the specified pickle file
     file_path = os.path.join(path, filename)
     df.to_pickle(file_path)
+
+
+def key_value_list_to_dict(key_value_list):
+    d = {}
+    for item in key_value_list:
+        key, value = item.split(':')
+        d[key] = float(value)
+
+    return d

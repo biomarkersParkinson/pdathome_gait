@@ -1,8 +1,11 @@
 import logging
 import sys
 
+from functools import partial
 from multiprocessing import Pool
-from pdathome.classification import detect_gait, filter_gait
+
+from pdathome.constants import classifiers
+from pdathome.classification import train_test_gait_detection, train_test_filtering_gait, store_gait_detection, store_filtering_gait
 from pdathome.preprocessing import prepare_data, preprocess_gait_detection, preprocess_filtering_gait
 
 # Configure logging
@@ -15,11 +18,15 @@ logging.basicConfig(
 steps_map = {
     '1': prepare_data,
     '2': preprocess_gait_detection,
-    '3': detect_gait,
-    '4': preprocess_filtering_gait,
-    '5': filter_gait,
+    '3': train_test_gait_detection,
+    '4': store_gait_detection,
+    '5': preprocess_filtering_gait,
+    '6': train_test_filtering_gait,
+    '7': store_filtering_gait,
 }
 
+# Define which steps should run in parallel
+parallel_steps = {'1', '2', '3', '5', '6'}  
 
 def parallelize_function(n_processes, l_ids, func):
     with Pool(int(n_processes)) as p:
@@ -28,16 +35,34 @@ def parallelize_function(n_processes, l_ids, func):
         except Exception:
             logging.exception("Exception occurred during parallel processing.")
 
+def sequential_function(func):
+    try:
+        func()
+    except Exception:
+        logging.exception(f"Exception occurred during sequential processing.")
 
 if __name__ == '__main__':
-    nproc = int(sys.argv[1]) # Number of parallel processes
-    steps = sys.argv[2] # Steps to run: (1) prepare_data, (2) preprocess_gait, (3) detect_gait, (4) preprocess_filtering_gait, (5) filter_gait (e.g., 345)
-    l_ids = sys.argv[3:] # List of ids to process
+    nproc = int(sys.argv[1])  # Number of parallel processes
+    steps = sys.argv[2]       # Steps to run: e.g., 345
+    l_ids = sys.argv[3:]      # List of ids to process
+
+    # Choose which classifiers to run
+    gd_models = [classifiers.GAIT_DETECTION_CLASSIFIER_SELECTED]
+    fg_models = [classifiers.ARM_ACTIVITY_CLASSIFIER_SELECTED]
+
+    for step, func in steps_map.items():
+        if step in ['3', '4']:
+            steps_map[step] = partial(func, l_classifiers=gd_models)
+        elif step in ['6', '7']:
+            steps_map[step] = partial(func, l_classifiers=fg_models)
 
     # Run the specified steps
     for step in steps:
         func = steps_map.get(step)
         if func:
-            parallelize_function(nproc, l_ids, func)
+            if step in parallel_steps:
+                parallelize_function(nproc, l_ids, func)
+            else:
+                sequential_function(func)
         else:
             logging.warning(f"Step {step} is not recognized.")

@@ -22,6 +22,7 @@ class Paths:
     PATH_CLASSIFIERS: str
     PATH_SCALERS: str
     PATH_THRESHOLDS: str
+    PATH_COEFFICIENTS: str
 
     PATH_PREPROCESSED_DATA: str
     PATH_PREPARED_DATA: str
@@ -48,6 +49,7 @@ class Paths:
             PATH_CLASSIFIERS=os.path.join(PATH_OUTPUT, 'classifiers'),
             PATH_SCALERS=os.path.join(PATH_OUTPUT, 'scalers'),
             PATH_THRESHOLDS=os.path.join(PATH_OUTPUT, 'classification_thresholds'),
+            PATH_COEFFICIENTS=os.path.join(PATH_OUTPUT, 'feature_coefficients'),
 
             PATH_PREPROCESSED_DATA=PATH_PREPROCESSED_DATA,
             PATH_PREPARED_DATA=os.path.join(PATH_PREPROCESSED_DATA, '0.prepared_data'),
@@ -259,6 +261,12 @@ classifier_hyperparameters = {
         'n_estimators': 100,
         'max_features': 'sqrt',
         'min_samples_split': 25,
+        'max_depth': 15,
+        'criterion': 'gini',
+        'bootstrap': True,
+        'oob_score': True,
+        'random_state': 22,
+        'n_jobs': -1,
     }
 }
 
