@@ -1,6 +1,8 @@
 import os
+
 from dataclasses import dataclass
 from dotenv import load_dotenv
+from matplotlib import colors, colormaps
 
 from paradigma.constants import DataColumns
 
@@ -9,42 +11,50 @@ load_dotenv()
 
 @dataclass(frozen=True)
 class Paths:
-    PATH_RAW_DATA: str
-    PATH_SENSOR_DATA: str
-    PATH_ANNOTATIONS_PD: str
-    PATH_ANNOTATIONS_CONTROLS: str
-    PATH_PREPROCESSED_DATA: str
+    PATH_DATA_FOLDER: str
+
     PATH_INPUT: str
-    PATH_GAIT_FEATURES: str
-    PATH_GAIT_PREDICTIONS: str
-    PATH_ARM_ACTIVITY_FEATURES: str
-    PATH_ARM_ACTIVITY_PREDICTIONS: str
+    PATH_SENSOR_DATA: str
+    PATH_ANNOTATIONS: str
     PATH_CLINICAL_DATA: str
-    PATH_DATAFRAMES: str
+
+    PATH_OUTPUT: str
     PATH_CLASSIFIERS: str
     PATH_SCALERS: str
     PATH_THRESHOLDS: str
 
+    PATH_PREPROCESSED_DATA: str
+    PATH_PREPARED_DATA: str
+    PATH_GAIT_FEATURES: str
+    PATH_GAIT_PREDICTIONS: str
+    PATH_ARM_ACTIVITY_FEATURES: str
+    PATH_ARM_ACTIVITY_PREDICTIONS: str
+
     @classmethod
     def from_env(cls):
-        PATH_RAW_DATA = os.getenv('PATH_RAW_DATA')
+        PATH_DATA_FOLDER = os.getenv('PATH_DATA_FOLDER')
+        PATH_INPUT = os.getenv('PATH_INPUT_DATA')
         PATH_PREPROCESSED_DATA = os.getenv('PATH_PREPROCESSED_DATA')
+        PATH_OUTPUT = os.getenv('PATH_OUTPUT_DATA')
         return cls(
-            PATH_RAW_DATA=PATH_RAW_DATA,
-            PATH_SENSOR_DATA=os.path.join(PATH_RAW_DATA, 'sensor_data'),
-            PATH_ANNOTATIONS_PD=os.path.join(PATH_RAW_DATA, 'video_annotations', 'pd'),
-            PATH_ANNOTATIONS_CONTROLS=os.path.join(PATH_RAW_DATA, 'video_annotations', 'controls'),
+            PATH_DATA_FOLDER=PATH_DATA_FOLDER,
+
+            PATH_INPUT=PATH_INPUT,
+            PATH_SENSOR_DATA=os.path.join(PATH_INPUT, 'sensor_data'),
+            PATH_ANNOTATIONS=os.path.join(PATH_INPUT, 'video_annotations'),
+            PATH_CLINICAL_DATA=os.path.join(PATH_INPUT, 'clinical_data'),
+
+            PATH_OUTPUT=PATH_OUTPUT,
+            PATH_CLASSIFIERS=os.path.join(PATH_OUTPUT, 'classifiers'),
+            PATH_SCALERS=os.path.join(PATH_OUTPUT, 'scalers'),
+            PATH_THRESHOLDS=os.path.join(PATH_OUTPUT, 'classification_thresholds'),
+
             PATH_PREPROCESSED_DATA=PATH_PREPROCESSED_DATA,
-            PATH_INPUT=os.path.join(PATH_PREPROCESSED_DATA, '0.input'),
+            PATH_PREPARED_DATA=os.path.join(PATH_PREPROCESSED_DATA, '0.prepared_data'),
             PATH_GAIT_FEATURES=os.path.join(PATH_PREPROCESSED_DATA, '1.gait_features'),
             PATH_GAIT_PREDICTIONS=os.path.join(PATH_PREPROCESSED_DATA, '2.gait_predictions'),
             PATH_ARM_ACTIVITY_FEATURES=os.path.join(PATH_PREPROCESSED_DATA, '3.arm_activity_features'),
             PATH_ARM_ACTIVITY_PREDICTIONS=os.path.join(PATH_PREPROCESSED_DATA, '4.arm_activity_predictions'),
-            PATH_CLINICAL_DATA=os.path.join(PATH_PREPROCESSED_DATA, '0.input', 'clinical_data'),
-            PATH_DATAFRAMES=os.path.join(PATH_PREPROCESSED_DATA, '0.input', 'dataframes'),
-            PATH_CLASSIFIERS=os.path.join(PATH_PREPROCESSED_DATA, '0.input', 'classifiers'),
-            PATH_SCALERS=os.path.join(PATH_PREPROCESSED_DATA, '0.input', 'scalers'),
-            PATH_THRESHOLDS=os.path.join(PATH_PREPROCESSED_DATA, '0.input', 'thresholds'),
         )
 
 @dataclass(frozen=True)
@@ -89,6 +99,10 @@ class Descriptives:
     LEAST_AFFECTED_SIDE: str
     RIGHT_WRIST: str
     LEFT_WRIST: str
+    PRE_MED: str
+    POST_MED: str
+    PARKINSONS_DISEASE: str
+    CONTROLS: str
 
 @dataclass(frozen=True)
 class Classifiers:
@@ -118,6 +132,12 @@ class Parameters:
     DOWNSAMPLED_FREQUENCY: int
     SEGMENT_GAP_GAIT: float
     SEGMENT_GAP_ARM_ACTIVITY: float
+
+@dataclass(frozen=True)
+class PlotParameters:
+    COLOR_PALETTE = 'Paired'
+    COLOR_PALETTE_FIRST_COLOR = colors.rgb2hex(colormaps[(COLOR_PALETTE)](0))
+    COLOR_PALETTE_SECOND_COLOR = colors.rgb2hex(colormaps[(COLOR_PALETTE)](1))
 
 # Instantiate objects
 paths = Paths.from_env()
@@ -161,7 +181,11 @@ descriptives = Descriptives(
     MOST_AFFECTED_SIDE='MAS',
     LEAST_AFFECTED_SIDE='LAS',
     RIGHT_WRIST='RW',
-    LEFT_WRIST='LW'
+    LEFT_WRIST='LW',
+    PRE_MED='pre',
+    POST_MED='post',
+    PARKINSONS_DISEASE='PD',
+    CONTROLS='HC'
 )
 
 classifiers = Classifiers(
@@ -237,6 +261,7 @@ classifier_hyperparameters = {
         'min_samples_split': 25,
     }
 }
+
 
 tiers_labels_map = {
     'General protocol structure' : {
