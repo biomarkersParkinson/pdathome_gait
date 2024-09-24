@@ -84,11 +84,10 @@ def prepare_data(subject):
         
         df_sensors = rotate_axes(df=df_sensors, subject=subject, wrist=wrist_pos)
 
-        df_sensors = df_sensors.loc[~df_sensors[columns.FREE_LIVING_LABEL].isna()]
+        df_sensors = df_sensors.loc[df_sensors[columns.FREE_LIVING_LABEL].notna()]
         df_sensors = df_sensors.loc[df_sensors[columns.FREE_LIVING_LABEL]!='Unknown']
+        df_sensors = df_sensors.loc[df_sensors[columns.PRE_OR_POST].notna()]
         df_sensors = df_sensors.reset_index(drop=True)
-
-        
 
         l_drop_cols = ['clinical_tests_label']
         if subject in participant_ids.L_PD_IDS:
@@ -141,14 +140,15 @@ def preprocess_gait_detection(subject):
         config.l_data_point_level_cols += [columns.TIME, columns.FREE_LIVING_LABEL]
         l_ts_cols = [columns.TIME, columns.WINDOW_NR, columns.FREE_LIVING_LABEL]
         l_export_cols = [columns.TIME, columns.WINDOW_NR, columns.ACTIVITY_LABEL_MAJORITY_VOTING, columns.GAIT_MAJORITY_VOTING] + list(config.d_channels_values.keys())
-
+        l_single_value_cols = None
         if subject in participant_ids.L_PD_IDS:
-            config.l_data_point_level_cols += [columns.PRE_OR_POST, columns.ARM_LABEL]
+            config.l_data_point_level_cols.append(columns.ARM_LABEL)
             l_ts_cols += [columns.PRE_OR_POST, columns.ARM_LABEL]
             l_export_cols += [columns.PRE_OR_POST, columns.ARM_LABEL_MAJORITY_VOTING]
+            l_single_value_cols = [columns.PRE_OR_POST]
         if subject in participant_ids.L_TREMOR_IDS:
-            config.l_data_point_level_cols += [columns.TREMOR_LABEL]
-            l_ts_cols += [columns.TREMOR_LABEL]
+            config.l_data_point_level_cols.append(columns.TREMOR_LABEL)
+            l_ts_cols.append(columns.TREMOR_LABEL)
 
 
         df_windowed = tabulate_windows(
@@ -156,7 +156,7 @@ def preprocess_gait_detection(subject):
                 window_size=config.window_length_s * parameters.DOWNSAMPLED_FREQUENCY,
                 step_size=config.window_step_size_s * parameters.DOWNSAMPLED_FREQUENCY,
                 time_column_name=columns.TIME,
-                single_value_cols=[columns.PRE_OR_POST],
+                single_value_cols=l_single_value_cols,
                 list_value_cols=config.l_data_point_level_cols,
                 agg_func='first',
         )
@@ -190,8 +190,6 @@ def preprocess_gait_detection(subject):
             sensor=config.sensor,
             l_sensor_colnames=config.l_accelerometer_cols
         )
-
-        df_windowed.to_pickle(os.path.join(paths.PATH_GAIT_FEATURES, f'{subject}_{side}_tmp.pkl'))
 
         save_to_pickle(
             df=df_windowed[l_export_cols],
@@ -247,7 +245,9 @@ def preprocess_filtering_gait(subject):
         # Merge sensor data with predictions
         l_merge_cols = [columns.TIME, columns.FREE_LIVING_LABEL]
         if subject in participant_ids.L_PD_IDS:
-            l_merge_cols += [columns.PRE_OR_POST, columns.ARM_LABEL]
+            l_merge_cols.append(columns.ARM_LABEL)
+            if columns.PRE_OR_POST in df_pred_side.columns:
+                l_merge_cols.append(columns.PRE_OR_POST)
 
         df = pd.merge(left=df_pred_side, right=df_sensors, how='left', on=l_merge_cols).reset_index(drop=True)
 
@@ -288,34 +288,32 @@ def preprocess_filtering_gait(subject):
         df = df[df[columns.PRED_GAIT] == 1].reset_index(drop=True)
 
         # Group consecutive timestamps into segments with new segments starting after a pre-specified gap
-        df = create_segments(
+        df[columns.SEGMENT_NR] = create_segments(
             df=df,
-            time_colname=columns.TIME,
-            segment_nr_colname=columns.SEGMENT_NR,
-            minimum_gap_s=arm_activity_config.window_length_s
+            time_column_name=columns.TIME,
+            segment_column_name=columns.SEGMENT_NR,
+            gap_threshold_s=arm_activity_config.window_length_s
         )
 
         # Remove any segments that do not adhere to predetermined criteria
         df = discard_segments(
             df=df,
-            time_colname=columns.TIME,
             segment_nr_colname=columns.SEGMENT_NR,
-            minimum_segment_length_s=arm_activity_config.window_length_s
+            min_length_segment_s=arm_activity_config.window_length_s,
+            sampling_frequency=arm_activity_config.sampling_frequency
         )
 
         # Create windows of fixed length and step size from the time series
         l_data_point_level_cols = arm_activity_config.l_data_point_level_cols + ([columns.PRE_OR_POST, columns.ARM_LABEL] if subject in participant_ids.L_PD_IDS else [])
 
         l_dfs = [
-            create_windows_vectorized(
+            tabulate_windows(
                 df=df[df[columns.SEGMENT_NR] == segment_nr].reset_index(drop=True),
+                window_size=int(arm_activity_config.window_length_s * arm_activity_config.sampling_frequency),
+                step_size=int(arm_activity_config.window_step_size_s * arm_activity_config.sampling_frequency),
                 time_column_name=columns.TIME,
-                data_point_level_cols=l_data_point_level_cols,
-                segment_nr_colname=columns.SEGMENT_NR,
-                window_length_s=arm_activity_config.window_length_s,
-                window_step_size_s=arm_activity_config.window_step_size_s,
-                segment_nr=segment_nr,
-                sampling_frequency=arm_activity_config.sampling_frequency
+                list_value_cols=l_data_point_level_cols,
+                single_value_cols=[columns.SEGMENT_NR],
             )
             for segment_nr in df[columns.SEGMENT_NR].unique()
         ]
@@ -409,7 +407,10 @@ def preprocess_filtering_gait(subject):
         df_windowed.fillna(0, inplace=True)
         df_windowed[columns.SIDE] = side
 
-        l_export_cols = [columns.TIME, columns.PRE_OR_POST, columns.SEGMENT_NR, columns.WINDOW_NR, columns.OTHER_ARM_ACTIVITY_MAJORITY_VOTING, columns.ARM_LABEL_MAJORITY_VOTING] + list(arm_activity_config.d_channels_values.keys())
+        l_export_cols = [columns.TIME, columns.SEGMENT_NR, columns.WINDOW_NR] + list(arm_activity_config.d_channels_values.keys())
+
+        if subject in participant_ids.L_PD_IDS:
+            l_export_cols += [columns.PRE_OR_POST, columns.ARM_LABEL_MAJORITY_VOTING, columns.OTHER_ARM_ACTIVITY_MAJORITY_VOTING]
 
         save_to_pickle(
             df=df_windowed[l_export_cols],
