@@ -31,6 +31,7 @@ def train_test(
     step: str,
     path_features: str,
     path_predictions: str
+    n_jobs: int
 ):
     # Initialize configuration
     config = config_class()
@@ -58,7 +59,8 @@ def train_test(
             target_column_name=target_column_name,
             pred_proba_colname=pred_proba_colname,
             pred_colname=pred_colname,
-            step=step
+            n_jobs=n_jobs,
+            step=step,
         )
 
         # Save predictions
@@ -104,7 +106,7 @@ def train_test_filtering_gait(subject, l_classifiers):
 
 
 def cv_train_test_model(subject, df, classifier_name, l_predictors, l_predictors_scale, target_column_name, 
-                        pred_proba_colname, pred_colname, step):
+                        pred_proba_colname, pred_colname, step, n_jobs=-1):
 
     # Check for valid step
     if step not in ['gait', 'arm_activity']:
@@ -135,12 +137,14 @@ def cv_train_test_model(subject, df, classifier_name, l_predictors, l_predictors
     if classifier_name == classifiers.RANDOM_FOREST:
         clf = RandomForestClassifier(
             **classifier_hyperparameters[classifiers.RANDOM_FOREST],
-            class_weight=class_weight
+            class_weight=class_weight,
+            n_jobs=n_jobs
         )
     elif classifier_name == classifiers.LOGISTIC_REGRESSION:
         clf = LogisticRegression(
             **classifier_hyperparameters[classifiers.LOGISTIC_REGRESSION],
             class_weight=class_weight,
+            n_jobs=n_jobs,
         )
         
     # Train the model
@@ -237,7 +241,7 @@ def windows_to_timestamps(subject, df, path_output, pred_proba_colname, step):
     )
 
 
-def store_model_output(df, step):
+def store_model_output(df, step, n_jobs=-1):
     if step not in ['gait', 'arm_activity']:
         raise ValueError("Step not recognized")
     
@@ -271,12 +275,14 @@ def store_model_output(df, step):
         if classifier_name == classifiers.RANDOM_FOREST:
             clf = RandomForestClassifier(
                 **classifier_hyperparameters[classifiers.RANDOM_FOREST],
-                class_weight=class_weight
+                class_weight=class_weight,
+                n_jobs=n_jobs
             )
         elif classifier_name == classifiers.LOGISTIC_REGRESSION:
             clf = LogisticRegression(
                 **classifier_hyperparameters[classifiers.LOGISTIC_REGRESSION],
                 class_weight=class_weight,
+                n_jobs=n_jobs
             )
 
         # Fit the model
@@ -360,7 +366,7 @@ def predict_controls(clf, scaler, classifier_name, l_predictors, l_predictors_sc
         )
 
 
-def store_gait_detection(classifier):
+def store_gait_detection(classifier, n_jobs=-1):
     df = load_dataframes_directory(
         directory_path=paths.PATH_GAIT_FEATURES,
         l_ids=participant_ids.L_PD_IDS + participant_ids.L_HC_IDS
@@ -370,16 +376,18 @@ def store_gait_detection(classifier):
         df=df,
         classifier=classifier,
         step='gait',
+        n_jobs=n_jobs
     )
 
 
-def store_filtering_gait(classifier):
+def store_filtering_gait(classifier, n_jobs=-1):
     df = load_dataframes_directory(
         directory_path=paths.PATH_ARM_ACTIVITY_FEATURES,
-        l_ids=participant_ids.L_PD_IDS
+        l_ids=participant_ids.L_PD_IDS,
     )
 
     store_model_output(
         df=df,
-        step='arm_activity'
+        step='arm_activity',
+        n_jobs=n_jobs
     )

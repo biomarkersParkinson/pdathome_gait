@@ -1,7 +1,7 @@
 #!/bin/bash
 #Set job requirements
 #SBATCH -N 1
-#SBATCH -t 00:15:00
+#SBATCH -t 03:00:00
 #SBATCH -p genoa
 #SBATCH -o ./slurm/output.%j.out # STDOUT
 
@@ -14,7 +14,7 @@ source $(poetry env info --path)/bin/activate
 
 #Run same program over many different inputs
 nproc=3
-steps=12345
+steps=2345
 input_ids=$(cat ../../id_files/all.txt)
 
 python -u run_pipeline.py $nproc $steps $input_ids

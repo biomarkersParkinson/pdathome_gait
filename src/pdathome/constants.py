@@ -255,7 +255,6 @@ classifier_hyperparameters = {
         'tol': 1e-4,
         'C': 1e-2,
         'random_state': 22,
-        'n_jobs': -1
     },
     classifiers.RANDOM_FOREST: {
         'n_estimators': 100,
@@ -266,7 +265,6 @@ classifier_hyperparameters = {
         'bootstrap': True,
         'oob_score': True,
         'random_state': 22,
-        'n_jobs': -1,
     }
 }
 
