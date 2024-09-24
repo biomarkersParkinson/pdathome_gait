@@ -1,7 +1,6 @@
 # Change the file name to .env
 
 # Change the variables below to the root directory where the data is collected and will be stored
-PATH_DATA_FOLDER=C:/path/to/raw/data
 PATH_INPUT_DATA=C:/path/to/input/data
 PATH_PREPROCESSED_DATA=C:/path/to/preprocessed/data
 PATH_OUTPUT_DATA=C:/path/to/output/data
