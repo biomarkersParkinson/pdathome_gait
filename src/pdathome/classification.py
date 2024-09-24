@@ -3,8 +3,10 @@ import numpy as np
 import os
 import pandas as pd
 import pickle
+import warnings
 
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.exceptions import ConvergenceWarning
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import roc_curve
 from sklearn.preprocessing import StandardScaler
@@ -14,6 +16,8 @@ from paradigma.gait_analysis_config import GaitFeatureExtractionConfig, ArmSwing
 
 from pdathome.constants import classifiers, columns, descriptives, participant_ids, paths
 from pdathome.utils import save_to_pickle
+
+warnings.filterwarnings("ignore", category=ConvergenceWarning)
 
 def classify(
     df_all_subjects: pd.DataFrame,
@@ -36,16 +40,15 @@ def classify(
     l_classifiers = list(classifier_bools.keys())
 
     for classifier in l_classifiers:
-        print(f"Processing classifier {classifier}")
-
         if classifier_bools[classifier]['train_test']:
+            print(f"Train-testing {classifier} ...")
             # Lists to store results
             l_thresholds = []
             l_importances = []
 
             # Iterate over subjects and process data
             for subject in l_test_subjects:
-                print(f"... Processing subject {subject}")
+                print(f"... Processing subject {subject} ...")
 
                 # Train and test model
                 df_test, classification_threshold, importances = cv_train_test_model(
@@ -73,14 +76,15 @@ def classify(
                 )
 
         if classifier_bools[classifier]['train_test'] and classifier_bools[classifier]['store_output']:
+            print(f"Storing threshold and feature coefficients {classifier} ...")
             
             # Save average threshold
             mean_threshold = np.mean(l_thresholds)
-            with open(os.path.join(paths.PATH_THRESHOLDS, step, f'{classifier}_threshold.txt'), 'w') as f:
+            with open(os.path.join(paths.PATH_THRESHOLDS, step, f'{classifier}.txt'), 'w') as f:
                 f.write(str(mean_threshold))
 
             # Save importances
-            with open(os.path.join(paths.PATH_CLASSIFIERS, step, f'{classifier}_importances.txt'), 'w') as f:
+            with open(os.path.join(paths.PATH_CLASSIFIERS, step, f'{classifier}.txt'), 'w') as f:
                 # Flatten the list of dictionaries and format them
                 all_importances = pd.concat([pd.Series(imp) for imp in l_importances], axis=1).mean(axis=1)
                 for feature, importance in all_importances.items():
@@ -88,7 +92,9 @@ def classify(
 
         if classifier_bools[classifier]['store_output']:
 
-            store_model(
+            print(f"Storing model and scaler {classifier} ...")
+
+            clf, scaler_params = store_model(
                 df=df_all_subjects,
                 model=classifier,
                 l_predictors=l_predictors,
@@ -98,6 +104,38 @@ def classify(
                 path_classifiers=paths.PATH_CLASSIFIERS,
                 step=step
             )
+
+            if step == 'arm_activity':
+
+                print("... Predicting for controls ...")
+
+                scaler = StandardScaler()
+                scaler.mean_ = scaler_params['mean']
+                scaler.var_ = scaler_params['var']
+                scaler.scale_ = scaler_params['scale']
+                scaler.feature_names_in_ = l_predictors_scale
+                
+                # Predict arm activity for the controls
+                for subject in participant_ids.L_HC_IDS:
+                    df_subj_mas = pd.read_pickle(os.path.join(paths.PATH_ARM_ACTIVITY_FEATURES, f'{subject}_{descriptives.MOST_AFFECTED_SIDE}.pkl'))
+                    df_subj_las = pd.read_pickle(os.path.join(paths.PATH_ARM_ACTIVITY_FEATURES, f'{subject}_{descriptives.LEAST_AFFECTED_SIDE}.pkl'))
+                    df_subj_mas['side'] = descriptives.MOST_AFFECTED_SIDE
+                    df_subj_las['side'] = descriptives.LEAST_AFFECTED_SIDE
+                    df_subj = pd.concat([df_subj_mas, df_subj_las]).reset_index(drop=True)
+
+                    df_subj[l_predictors_scale] = scaler.transform(df_subj[l_predictors_scale])
+                    df_subj[pred_proba_colname] = clf.predict_proba(df_subj[l_predictors])[:,1]
+                    df_subj[pred_colname] = clf.predict(df_subj[l_predictors])
+
+                    windows_to_timestamps(
+                        subject=subject, df=df_subj,
+                        path_output=os.path.join(path_predictions, classifier),
+                        pred_proba_colname=pred_proba_colname,
+                        step=step
+                    )
+
+        if classifier_bools[classifier]['train_test'] or classifier_bools[classifier]['store_output']:
+            print(f"Finished {classifier}!")
 
 
 def detect_gait(df_all_subjects, l_test_subjects, classifier_bools):
@@ -151,10 +189,10 @@ def cv_train_test_model(subject, df, model, l_predictors, l_predictors_scale, ta
     df_test[l_predictors_scale] = scaler.transform(df_test[l_predictors_scale])
 
     # Define train and test sets
-    X_train = df_train[l_predictors].values
-    y_train = df_train[target_column_name].values.astype(int)
-    X_test = df_test[l_predictors].values
-    y_test = df_test[target_column_name].values.astype(int)
+    X_train = df_train[l_predictors]
+    y_train = df_train[target_column_name].astype(int)
+    X_test = df_test[l_predictors]
+    y_test = df_test[target_column_name].astype(int)
 
     # Initialize the model
     if model == classifiers.RANDOM_FOREST:
@@ -177,8 +215,8 @@ def cv_train_test_model(subject, df, model, l_predictors, l_predictors_scale, ta
     
     # Threshold determination for 'gait' step
     if step == 'gait':
-        X_pop_train = df_train.loc[pd_train_mask, l_predictors].values
-        y_pop_train = df_train.loc[pd_train_mask, target_column_name].values.astype(int)
+        X_pop_train = df_train.loc[pd_train_mask, l_predictors]
+        y_pop_train = df_train.loc[pd_train_mask, target_column_name].astype(int)
         y_train_pred_proba_pop = clf.predict_proba(X_pop_train)[:,1]
 
         # set threshold to obtain at least 95% train specificity
@@ -194,8 +232,11 @@ def cv_train_test_model(subject, df, model, l_predictors, l_predictors_scale, ta
     # Feature importance
     if model == classifiers.RANDOM_FOREST:
         importances = pd.Series(clf.feature_importances_, index=l_predictors)
+        importances = importances.sort_values(ascending=False)
+        
     elif model == classifiers.LOGISTIC_REGRESSION:
         importances = pd.Series(clf.coef_[0], index=l_predictors)
+        importances = importances.sort_values(ascending=False)
     
     return df_test, classification_threshold, importances
 
@@ -228,9 +269,10 @@ def windows_to_timestamps(subject, df, path_output, pred_proba_colname, step):
         path_features = paths.PATH_GAIT_FEATURES
         l_explode_cols.append(columns.FREE_LIVING_LABEL)
         l_groupby_cols.append(columns.FREE_LIVING_LABEL)
-    else:
-        l_subj_cols += [columns.OTHER_ARM_ACTIVITY_MAJORITY_VOTING, columns.ARM_LABEL_MAJORITY_VOTING]
+    elif step == 'arm_activity':
         path_features = paths.PATH_ARM_ACTIVITY_FEATURES
+        if subject in participant_ids.L_PD_IDS:
+            l_subj_cols += [columns.OTHER_ARM_ACTIVITY_MAJORITY_VOTING, columns.ARM_LABEL_MAJORITY_VOTING]
 
     # Select relevant columns
     df = df[l_subj_cols]     
@@ -268,8 +310,6 @@ def windows_to_timestamps(subject, df, path_output, pred_proba_colname, step):
 
 
 def store_model(df, model, l_predictors, l_predictors_scale, target_column_name, path_scalers, path_classifiers, step):
-    print('Storing model ...')
-
     if step not in ['gait', 'arm_activity']:
         raise ValueError("Step not recognized")
     
@@ -284,8 +324,8 @@ def store_model(df, model, l_predictors, l_predictors_scale, target_column_name,
     scaler.fit(df_pd[l_predictors_scale])
     df_scaled[l_predictors_scale] = scaler.transform(df_scaled[l_predictors_scale])
 
-    X = df_scaled[l_predictors].to_numpy()
-    y = df_scaled[target_column_name].astype(int).values
+    X = df_scaled[l_predictors]
+    y = df_scaled[target_column_name].astype(int)
 
     # train on all subjects and store model
     if model == classifiers.RANDOM_FOREST:
@@ -303,7 +343,7 @@ def store_model(df, model, l_predictors, l_predictors_scale, target_column_name,
     clf.fit(X, y)
 
     # Save the model as a pickle file
-    model_path = os.path.join(path_classifiers, step, f'clf_{model}.pkl')
+    model_path = os.path.join(path_classifiers, step, f'{model}.pkl')
 
     if not os.path.exists(path_classifiers):
         os.makedirs(path_classifiers)
@@ -318,7 +358,7 @@ def store_model(df, model, l_predictors, l_predictors_scale, target_column_name,
         'scale': scaler.scale_.tolist()
     }
 
-    scaler_path = os.path.join(path_scalers, step, f'scaler_params_{step}.json')
+    scaler_path = os.path.join(path_scalers, step, f'scaler_params.json')
 
     if not os.path.exists(path_scalers):
         os.makedirs(path_scalers)
@@ -327,3 +367,5 @@ def store_model(df, model, l_predictors, l_predictors_scale, target_column_name,
         json.dump(scaler_params, f)
 
     print(f'Model and scaler stored successfully for {step}.')
+
+    return clf, scaler_params
