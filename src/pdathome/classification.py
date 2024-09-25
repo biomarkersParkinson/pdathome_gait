@@ -45,8 +45,6 @@ def train_test(
         l_ids=l_ids
     )
 
-    print(f"... Processing subject {subject} ...")
-
     for classifier_name in l_classifiers:
 
         # Train and test model
@@ -76,6 +74,7 @@ def train_test(
 
 
 def train_test_gait_detection(subject, l_classifiers, n_jobs):
+    print(f"Gait detection - Train-testing with LOSO - {subject} ...")
     train_test(
         subject=subject,
         l_ids=gc.participant_ids.L_PD_IDS + gc.participant_ids.L_HC_IDS,
@@ -92,6 +91,7 @@ def train_test_gait_detection(subject, l_classifiers, n_jobs):
 
 
 def train_test_filtering_gait(subject, l_classifiers, n_jobs):
+    print(f"Filtering gait - Train-testing with LOSO - {subject} ...")
     train_test(
         subject=subject,
         l_ids=gc.participant_ids.L_PD_IDS,
