@@ -75,7 +75,7 @@ def train_test(
             f.write(str(classification_threshold))
 
 
-def train_test_gait_detection(subject, l_classifiers):
+def train_test_gait_detection(subject, l_classifiers, n_jobs):
     train_test(
         subject=subject,
         l_ids=participant_ids.L_PD_IDS + participant_ids.L_HC_IDS,
@@ -86,11 +86,12 @@ def train_test_gait_detection(subject, l_classifiers):
         pred_colname=columns.PRED_GAIT,
         step='gait',
         path_features=paths.PATH_GAIT_FEATURES,
-        path_predictions=paths.PATH_GAIT_PREDICTIONS
+        path_predictions=paths.PATH_GAIT_PREDICTIONS,
+        n_jobs=n_jobs
     )
 
 
-def train_test_filtering_gait(subject, l_classifiers):
+def train_test_filtering_gait(subject, l_classifiers, n_jobs):
     train_test(
         subject=subject,
         l_ids=participant_ids.L_PD_IDS,
@@ -101,7 +102,8 @@ def train_test_filtering_gait(subject, l_classifiers):
         pred_colname=columns.PRED_OTHER_ARM_ACTIVITY,
         step='arm_activity',
         path_features=paths.PATH_ARM_ACTIVITY_FEATURES,
-        path_predictions=paths.PATH_ARM_ACTIVITY_PREDICTIONS
+        path_predictions=paths.PATH_ARM_ACTIVITY_PREDICTIONS,
+        n_jobs=n_jobs
     )
 
 
@@ -373,7 +375,7 @@ def store_gait_detection(l_classifiers, n_jobs=-1):
     for classifier in l_classifiers:
         store_model_output(
             df=df,
-            classifier=classifier,
+            classifier_name=classifier,
             step='gait',
             n_jobs=n_jobs
         )
@@ -388,6 +390,7 @@ def store_filtering_gait(l_classifiers, n_jobs=-1):
     for classifier in l_classifiers:
         store_model_output(
             df=df,
+            classifier_name=classifier,
             step='arm_activity',
             n_jobs=n_jobs
         )
