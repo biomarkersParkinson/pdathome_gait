@@ -3,6 +3,7 @@ import os
 from dataclasses import dataclass
 from dotenv import load_dotenv
 from matplotlib import colors, colormaps
+from typing import Any, Dict, List
 
 from paradigma.constants import DataColumns
 
@@ -12,18 +13,15 @@ load_dotenv()
 @dataclass(frozen=True)
 class Paths:
     PATH_DATA_FOLDER: str
-
     PATH_INPUT: str
     PATH_SENSOR_DATA: str
     PATH_ANNOTATIONS: str
     PATH_CLINICAL_DATA: str
-
     PATH_OUTPUT: str
     PATH_CLASSIFIERS: str
     PATH_SCALERS: str
     PATH_THRESHOLDS: str
     PATH_COEFFICIENTS: str
-
     PATH_PREPROCESSED_DATA: str
     PATH_PREPARED_DATA: str
     PATH_GAIT_FEATURES: str
@@ -38,225 +36,94 @@ class Paths:
         PATH_PREPROCESSED_DATA = os.getenv('PATH_PREPROCESSED_DATA')
         PATH_OUTPUT = os.getenv('PATH_OUTPUT_DATA')
         return cls(
-            PATH_DATA_FOLDER=PATH_DATA_FOLDER,
-
-            PATH_INPUT=PATH_INPUT,
-            PATH_SENSOR_DATA=os.path.join(PATH_INPUT, 'sensor_data'),
-            PATH_ANNOTATIONS=os.path.join(PATH_INPUT, 'video_annotations'),
-            PATH_CLINICAL_DATA=os.path.join(PATH_INPUT, 'clinical_data'),
-
-            PATH_OUTPUT=PATH_OUTPUT,
-            PATH_CLASSIFIERS=os.path.join(PATH_OUTPUT, 'classifiers'),
-            PATH_SCALERS=os.path.join(PATH_OUTPUT, 'scalers'),
-            PATH_THRESHOLDS=os.path.join(PATH_OUTPUT, 'classification_thresholds'),
-            PATH_COEFFICIENTS=os.path.join(PATH_OUTPUT, 'feature_coefficients'),
-
-            PATH_PREPROCESSED_DATA=PATH_PREPROCESSED_DATA,
-            PATH_PREPARED_DATA=os.path.join(PATH_PREPROCESSED_DATA, '0.prepared_data'),
-            PATH_GAIT_FEATURES=os.path.join(PATH_PREPROCESSED_DATA, '1.gait_features'),
-            PATH_GAIT_PREDICTIONS=os.path.join(PATH_PREPROCESSED_DATA, '2.gait_predictions'),
-            PATH_ARM_ACTIVITY_FEATURES=os.path.join(PATH_PREPROCESSED_DATA, '3.arm_activity_features'),
-            PATH_ARM_ACTIVITY_PREDICTIONS=os.path.join(PATH_PREPROCESSED_DATA, '4.arm_activity_predictions'),
+            PATH_DATA_FOLDER = PATH_DATA_FOLDER,
+            PATH_INPUT = PATH_INPUT,
+            PATH_SENSOR_DATA = os.path.join(PATH_INPUT, 'sensor_data'),
+            PATH_ANNOTATIONS = os.path.join(PATH_INPUT, 'video_annotations'),
+            PATH_CLINICAL_DATA = os.path.join(PATH_INPUT, 'clinical_data'),
+            PATH_OUTPUT = PATH_OUTPUT,
+            PATH_CLASSIFIERS = os.path.join(PATH_OUTPUT, 'classifiers'),
+            PATH_SCALERS = os.path.join(PATH_OUTPUT, 'scalers'),
+            PATH_THRESHOLDS = os.path.join(PATH_OUTPUT, 'classification_thresholds'),
+            PATH_COEFFICIENTS = os.path.join(PATH_OUTPUT, 'feature_coefficients'),
+            PATH_PREPROCESSED_DATA = PATH_PREPROCESSED_DATA,
+            PATH_PREPARED_DATA = os.path.join(PATH_PREPROCESSED_DATA, '0.prepared_data'),
+            PATH_GAIT_FEATURES = os.path.join(PATH_PREPROCESSED_DATA, '1.gait_features'),
+            PATH_GAIT_PREDICTIONS = os.path.join(PATH_PREPROCESSED_DATA, '2.gait_predictions'),
+            PATH_ARM_ACTIVITY_FEATURES = os.path.join(PATH_PREPROCESSED_DATA, '3.arm_activity_features'),
+            PATH_ARM_ACTIVITY_PREDICTIONS = os.path.join(PATH_PREPROCESSED_DATA, '4.arm_activity_predictions'),
         )
 
 @dataclass(frozen=True)
 class Columns:
-    ID: str
-    TIME: str
-    PRE_OR_POST: str
-    ACCELEROMETER_X: str
-    ACCELEROMETER_Y: str
-    ACCELEROMETER_Z: str
-    GRAV_ACCELEROMETER_X: str
-    GRAV_ACCELEROMETER_Y: str
-    GRAV_ACCELEROMETER_Z: str
-    GYROSCOPE_X: str
-    GYROSCOPE_Y: str
-    GYROSCOPE_Z: str
-    SIDE: str
-    FREE_LIVING_LABEL: str
-    ARM_LABEL: str
-    TREMOR_LABEL: str
-    ACTIVITY_LABEL_MAJORITY_VOTING: str
-    GAIT_MAJORITY_VOTING: str
-    ARM_LABEL_MAJORITY_VOTING: str
-    OTHER_ARM_ACTIVITY_MAJORITY_VOTING: str
-    PRED_GAIT: str
-    PRED_GAIT_PROBA: str
-    PRED_OTHER_ARM_ACTIVITY: str
-    PRED_OTHER_ARM_ACTIVITY_PROBA: str
-    ANGLE: str
-    ANGLE_SMOOTH: str
-    VELOCITY: str
-    WINDOW_NR: str
-    SEGMENT_NR: str
-    SEGMENT_CAT: str
-    L_ACCELEROMETER: list
-    L_GYROSCOPE: list
-    L_ARM_ACTIVITY_ANNOTATIONS: list
+    ID: str = 'id'
+    TIME: str = DataColumns.TIME
+    PRE_OR_POST: str = 'pre_or_post'
+    ACCELEROMETER_X: str = DataColumns.ACCELEROMETER_X
+    ACCELEROMETER_Y: str = DataColumns.ACCELEROMETER_Y
+    ACCELEROMETER_Z: str = DataColumns.ACCELEROMETER_Z
+    GRAV_ACCELEROMETER_X: str = f'grav_{DataColumns.ACCELEROMETER_X}'
+    GRAV_ACCELEROMETER_Y: str = f'grav_{DataColumns.ACCELEROMETER_Y}'
+    GRAV_ACCELEROMETER_Z: str = f'grav_{DataColumns.ACCELEROMETER_Z}'
+    GYROSCOPE_X: str = DataColumns.GYROSCOPE_X
+    GYROSCOPE_Y: str = DataColumns.GYROSCOPE_Y
+    GYROSCOPE_Z: str = DataColumns.GYROSCOPE_Z
+    SIDE: str = 'side'
+    FREE_LIVING_LABEL: str = 'free_living_label'
+    ARM_LABEL: str = 'arm_label'
+    TREMOR_LABEL: str = 'tremor_label'
+    ACTIVITY_LABEL_MAJORITY_VOTING: str = 'activity_majority_voting'
+    GAIT_MAJORITY_VOTING: str = 'gait_majority_voting'
+    ARM_LABEL_MAJORITY_VOTING: str = 'arm_activity_majority_voting'
+    OTHER_ARM_ACTIVITY_MAJORITY_VOTING: str = 'other_arm_activity_majority_voting'
+    PRED_GAIT: str = 'pred_gait'
+    PRED_GAIT_PROBA: str = 'pred_gait_proba'
+    PRED_OTHER_ARM_ACTIVITY: str = 'pred_other_arm_activity'
+    PRED_OTHER_ARM_ACTIVITY_PROBA: str = 'pred_other_arm_activity_proba'
+    ANGLE: str = 'angle'
+    ANGLE_SMOOTH: str = 'angle_smooth'
+    VELOCITY: str = 'velocity'
+    WINDOW_NR: str = 'window_nr'
+    TRUE_GAIT_SEGMENT_NR: str = 'true_gait_segment_nr'
+    PRED_GAIT_SEGMENT_NR: str = 'pred_gait_segment_nr'
+    SEGMENT_CAT: str = 'segment_cat'
+    L_ACCELEROMETER: List[str] = [
+        DataColumns.ACCELEROMETER_X, DataColumns.ACCELEROMETER_Y, DataColumns.ACCELEROMETER_Z
+    ]
+    L_GYROSCOPE: List[str] = [
+        DataColumns.GYROSCOPE_X, DataColumns.GYROSCOPE_Y, DataColumns.GYROSCOPE_Z
+    ]
+    L_ARM_ACTIVITY_ANNOTATIONS: List[str] = [
+        'tier', 'nan', 'start_s', 'end_s', 'duration_s', 'code'
+    ]
 
 @dataclass(frozen=True)
 class Descriptives:
-    MOST_AFFECTED_SIDE: str
-    LEAST_AFFECTED_SIDE: str
-    RIGHT_WRIST: str
-    LEFT_WRIST: str
-    PRE_MED: str
-    POST_MED: str
-    PARKINSONS_DISEASE: str
-    CONTROLS: str
+    MOST_AFFECTED_SIDE: str = 'MAS'
+    LEAST_AFFECTED_SIDE: str = 'LAS'
+    RIGHT_WRIST: str = 'RW'
+    LEFT_WRIST: str = 'LW'
+    PRE_MED: str = 'pre'
+    POST_MED: str = 'post'
+    PARKINSONS_DISEASE: str = 'PD'
+    CONTROLS: str = 'HC'
 
-@dataclass(frozen=True)
+@dataclass(frozen=False)
 class Classifiers:
-    LOGISTIC_REGRESSION: str
-    RANDOM_FOREST: str
-    GAIT_DETECTION_CLASSIFIER_SELECTED: str
-    ARM_ACTIVITY_CLASSIFIER_SELECTED: str
+    LOGISTIC_REGRESSION: str = 'logreg'
+    RANDOM_FOREST: str = 'rf'
+    GAIT_DETECTION_CLASSIFIER_SELECTED: str = 'rf'
+    ARM_ACTIVITY_CLASSIFIER_SELECTED: str = 'logreg'
 
-@dataclass(frozen=True)
-class ParticipantIDs:
-    L_PD_IDS: list
-    L_HC_IDS: list
-    L_PRE_IDS: list
-    L_TREMOR_IDS: list
-    L_W_PARTS: list
-    L_L_NORMAL: list
-    L_R_NORMAL: list
-    L_PD_MOST_AFFECTED_LEFT: list
-    L_PD_MOST_AFFECTED_RIGHT: list
-    L_PD_DOMINANT_LEFT: list
-    L_PD_DOMINANT_BOTH: list
-    L_PD_DOMINANT_RIGHT: list
-
-@dataclass(frozen=True)
-class Parameters:
-    SAMPLING_FREQUENCY: int
-    DOWNSAMPLED_FREQUENCY: int
-    SEGMENT_GAP_GAIT: float
-    SEGMENT_GAP_ARM_ACTIVITY: float
-
-@dataclass(frozen=True)
-class PlotParameters:
-    COLOR_PALETTE = 'Paired'
-    COLOR_PALETTE_FIRST_COLOR = colors.rgb2hex(colormaps[(COLOR_PALETTE)](0))
-    COLOR_PALETTE_SECOND_COLOR = colors.rgb2hex(colormaps[(COLOR_PALETTE)](1))
-
-# Instantiate objects
-paths = Paths.from_env()
-columns = Columns(
-    ID='id',
-    TIME=DataColumns.TIME,
-    PRE_OR_POST='pre_or_post',
-    ACCELEROMETER_X=DataColumns.ACCELEROMETER_X,
-    ACCELEROMETER_Y=DataColumns.ACCELEROMETER_Y,
-    ACCELEROMETER_Z=DataColumns.ACCELEROMETER_Z,
-    GRAV_ACCELEROMETER_X=f'grav_{DataColumns.ACCELEROMETER_X}',
-    GRAV_ACCELEROMETER_Y=f'grav_{DataColumns.ACCELEROMETER_Y}',
-    GRAV_ACCELEROMETER_Z=f'grav_{DataColumns.ACCELEROMETER_Z}',
-    GYROSCOPE_X=DataColumns.GYROSCOPE_X,
-    GYROSCOPE_Y=DataColumns.GYROSCOPE_Y,
-    GYROSCOPE_Z=DataColumns.GYROSCOPE_Z,
-    SIDE='side',
-    FREE_LIVING_LABEL='free_living_label',
-    ARM_LABEL='arm_label',
-    TREMOR_LABEL='tremor_label',
-    ACTIVITY_LABEL_MAJORITY_VOTING='activity_majority_voting',
-    GAIT_MAJORITY_VOTING='gait_majority_voting',
-    ARM_LABEL_MAJORITY_VOTING='arm_activity_majority_voting',
-    OTHER_ARM_ACTIVITY_MAJORITY_VOTING='other_arm_activity_majority_voting',
-    PRED_GAIT='pred_gait',
-    PRED_GAIT_PROBA='pred_gait_proba',
-    PRED_OTHER_ARM_ACTIVITY='pred_other_arm_activity',
-    PRED_OTHER_ARM_ACTIVITY_PROBA='pred_other_arm_activity_proba',
-    ANGLE='angle',
-    ANGLE_SMOOTH='angle_smooth',
-    VELOCITY='velocity',
-    WINDOW_NR='window_nr',
-    SEGMENT_NR='segment_nr',  
-    SEGMENT_CAT='segment_cat',  
-    L_ACCELEROMETER=[DataColumns.ACCELEROMETER_X, DataColumns.ACCELEROMETER_Y, DataColumns.ACCELEROMETER_Z],
-    L_GYROSCOPE=[DataColumns.GYROSCOPE_X, DataColumns.GYROSCOPE_Y, DataColumns.GYROSCOPE_Z],
-    L_ARM_ACTIVITY_ANNOTATIONS=['tier', 'nan', 'start_s', 'end_s', 'duration_s', 'code']
-)
-
-descriptives = Descriptives(
-    MOST_AFFECTED_SIDE='MAS',
-    LEAST_AFFECTED_SIDE='LAS',
-    RIGHT_WRIST='RW',
-    LEFT_WRIST='LW',
-    PRE_MED='pre',
-    POST_MED='post',
-    PARKINSONS_DISEASE='PD',
-    CONTROLS='HC'
-)
-
-classifiers = Classifiers(
-    LOGISTIC_REGRESSION='logreg',
-    RANDOM_FOREST='rf',
-    GAIT_DETECTION_CLASSIFIER_SELECTED='rf',
-    ARM_ACTIVITY_CLASSIFIER_SELECTED='logreg'
-)
-
-participant_ids = ParticipantIDs(
-    L_PD_IDS=['hbv' + x for x in [
-        '002', '012', '014', '015', '016', '017', '022', '024', '039', '043', '047',
-        '054', '065', '077', '079', '090', '013', '018', '023', '038', '058', '063'
-    ]],
-    L_HC_IDS=['hbv' + x for x in [
-        '053', '072', '073', '082', '083', '084', '087', '091', '093', '097', '099',
-        '100', '106', '108', '109', '110', '112', '115', '117', '122', '128', '136', '081'
-    ]],
-    L_PRE_IDS=['hbv115', 'hbv117', 'hbv122', 'hbv136'],
-    L_TREMOR_IDS=['hbv' + x for x in [
-        '012', '013', '017', '018', '022', '023', '038', '090'
-    ]],
-    L_W_PARTS=['hbv013', 'hbv018', 'hbv023', 'hbv038', 'hbv058', 'hbv063', 'hbv080'],
-    L_L_NORMAL=['hbv' + x for x in [
-        '002', '012', '013', '014', '015', '017', '018', '022', '023', '024', '038',
-        '039', '043', '047', '054', '063', '077', '079', '090', '053', '072', '073',
-        '081', '082', '083', '084', '087', '091', '093', '097', '099', '100', '106',
-        '108', '109', '110', '112', '115', '117', '122', '128', '136'
-    ]],
-    L_R_NORMAL=['hbv' + x for x in [
-        '002', '012', '013', '014', '015', '017', '018', '022', '023', '024', '038',
-        '039', '043', '047', '054', '063', '077', '079', '090', '053', '072', '073',
-        '081', '082', '083', '084', '087', '091', '093', '097', '099', '100', '106',
-        '108', '109', '110', '112', '115', '117', '122', '128', '136', '058'
-    ]],
-    L_PD_MOST_AFFECTED_LEFT=['hbv' + x for x in [
-        '013', '014', '015', '016', '017', '022', '024', '039', '043', '047', '077'
-    ]],
-    L_PD_MOST_AFFECTED_RIGHT=['hbv' + x for x in [
-        '002', '012', '018', '023', '038', '054', '058', '063', '065', '074', '079', '090'
-    ]],
-    L_PD_DOMINANT_LEFT=['hbv' + x for x in [
-        '002', '016', '024', '043', '065'
-    ]],
-    L_PD_DOMINANT_BOTH=['hbv' + x for x in [
-        '013', '079'
-    ]],
-    L_PD_DOMINANT_RIGHT=['hbv' + x for x in [
-        '012', '014', '015', '017', '022', '039', '047', '054',
-        '077', '090', '018', '023', '038', '058', '063'
-    ]],
-)
-
-parameters = Parameters(
-    SAMPLING_FREQUENCY=200,
-    DOWNSAMPLED_FREQUENCY=100,
-    SEGMENT_GAP_GAIT=2.5,
-    SEGMENT_GAP_ARM_ACTIVITY=1.5
-)
-
-classifier_hyperparameters = {
-    classifiers.LOGISTIC_REGRESSION: {
+    LOGISTIC_REGRESSION_HYPERPARAMETERS: Dict[str, Any] = {
         'penalty': 'l1',
         'solver': 'saga',
         'tol': 1e-4,
         'C': 1e-2,
         'random_state': 22,
-    },
-    classifiers.RANDOM_FOREST: {
+    }
+
+    RANDOM_FOREST_HYPERPARAMETERS: Dict[str, Any] = {
         'n_estimators': 100,
         'max_features': 'sqrt',
         'min_samples_split': 25,
@@ -266,8 +133,136 @@ classifier_hyperparameters = {
         'oob_score': True,
         'random_state': 22,
     }
+
+@dataclass(frozen=True)
+class ParticipantIDs:
+    # Parkinson's disease (PD) IDs
+    L_PD_IDS: List[str] = ['hbv' + x for x in [
+        '002', '012', '014', '015', '016', '017', '022', '024',
+        '039', '043', '047', '054', '065', '077', '079', '090',
+        '013', '018', '023', '038', '058', '063'
+    ]]
+    
+    # Control IDs
+    L_HC_IDS: List[str] = ['hbv' + x for x in [
+        '053', '072', '073', '082', '083', '084', '087', '091',
+        '093', '097', '099', '100', '106', '108', '109', '110',
+        '112', '115', '117', '122', '128', '136', '081'
+    ]]
+
+    # PD IDs pre-medication
+    L_PRE_IDS: List[str] = ['hbv' + x for x in [
+        'hbv115', 'hbv117', 'hbv122', 'hbv136'
+    ]]
+
+    # PD IDs with tremor
+    L_TREMOR_IDS: List[str] = ['hbv' + x for x in [
+        '012', '013', '017', '018', '022', '023', '038', '090'
+    ]]
+
+    # PD IDs with multiple raw files
+    L_W_PARTS: List[str] = ['hbv' + x for x in [
+        'hbv013', 'hbv018', 'hbv023', 'hbv038', 'hbv058',
+        'hbv063', 'hbv080'
+    ]]
+
+    # PD IDs with sensor on left wrist in normal position
+    L_L_NORMAL: List[str] = ['hbv' + x for x in [
+        '002', '012', '013', '014', '015', '017', '018', '022',
+        '023', '024', '038', '039', '043', '047', '054', '063',
+        '077', '079', '090', '053', '072', '073', '081', '082',
+        '083', '084', '087', '091', '093', '097', '099', '100',
+        '106', '108', '109', '110', '112', '115', '117', '122',
+        '128', '136'
+    ]]
+
+    # PD IDs with sensor on right wrist in normal position
+    L_R_NORMAL: List[str] = ['hbv' + x for x in [
+        '002', '012', '013', '014', '015', '017', '018', '022',
+        '023', '024', '038', '039', '043', '047', '054', '063',
+        '077', '079', '090', '053', '072', '073', '081', '082',
+        '083', '084', '087', '091', '093', '097', '099', '100',
+        '106', '108', '109', '110', '112', '115', '117', '122',
+        '128', '136', '058'
+    ]]
+
+    # PD IDs with most affected side left
+    L_PD_MOST_AFFECTED_LEFT: List[str] = ['hbv' + x for x in [
+        '013', '014', '015', '016', '017', '022', '024', '039',
+        '043', '047', '077'
+    ]]
+
+    # PD IDs with most affected side right
+    L_PD_MOST_AFFECTED_RIGHT: List[str] = ['hbv' + x for x in [
+        '002', '012', '018', '023', '038', '054', '058', '063',
+        '065', '074', '079', '090'
+    ]]
+
+    # PD IDs with dominant side left
+    L_PD_DOMINANT_LEFT: List[str] = ['hbv' + x for x in [
+        '002', '016', '024', '043', '065'
+    ]]
+
+    # PD IDs with dominant side right
+    L_PD_DOMINANT_RIGHT: List[str] = ['hbv' + x for x in [
+        '012', '014', '015', '017', '022', '039', '047', '054',
+        '077', '090', '018', '023', '038', '058', '063'
+    ]]
+
+    # PD IDs with dominant side both
+    L_PD_DOMINANT_BOTH: List[str] = ['hbv' + x for x in [
+        '013', '079'
+    ]]
+
+@dataclass(frozen=True)
+class Parameters:
+    SAMPLING_FREQUENCY: int = 200
+    DOWNSAMPLED_FREQUENCY: int = 100
+    SEGMENT_GAP_GAIT: float = 1.5
+    SEGMENT_GAP_ARM_ACTIVITY: float = 1.5
+
+@dataclass(frozen=True)
+class PlotParameters:
+    COLOR_PALETTE: str = 'Paired'
+    COLOR_PALETTE_FIRST_COLOR: str = colors.rgb2hex(
+        colormaps[(COLOR_PALETTE)](0)
+    )
+    COLOR_PALETTE_SECOND_COLOR: str = colors.rgb2hex(
+        colormaps[(COLOR_PALETTE)](1)
+    )
+
+@dataclass(frozen=True)
+class GlobalConstants:
+    paths: Paths
+    columns: Columns
+    descriptives: Descriptives
+    classifiers: Classifiers
+    participant_ids: ParticipantIDs
+    parameters: Parameters
+    plot_parameters: PlotParameters
+
+# Instantiate objects
+paths = Paths.from_env()
+
+activity_map = {
+    'Lie-to-sit': 'Transitioning',
+    'Lie-to-stand': 'Transitioning',
+    'Sit-to-lie': 'Transitioning',
+    'Sit-to-stand (low chair/couch)': 'Transitioning',
+    'Sit-to-stand (normal chair)': 'Transitioning',
+    'Stand-to-lie': 'Transitioning',
+    'Stand-to-sit (low chair/couch)': 'Transitioning',
+    'Stand-to-sit (normal chair)': 'Transitioning',
+    'Walking downstairs': 'Walking the stairs',
+    'Walking upstairs': 'Walking the stairs',
 }
 
+segment_map = {
+    1: 'short',
+    2: 'moderately_long',
+    3: 'long',
+    4: 'very_long'
+}
 
 tiers_labels_map = {
     'General protocol structure' : {
@@ -537,3 +532,12 @@ d_updrs_scoring_map = {
     } for med_stage in ['Of', 'On']
 }
 
+@dataclass(frozen=True)
+class Mappings:
+    activity_map: dict
+    segment_map: dict
+    tiers_labels_map: dict
+    tiers_rename: dict
+    arm_labels_rename: dict
+    updrs_3_map: dict
+    d_updrs_scoring_map: dict

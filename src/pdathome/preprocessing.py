@@ -15,10 +15,9 @@ from paradigma.feature_extraction import extract_temporal_domain_features, extra
 from paradigma.gait_analysis_config import GaitFeatureExtractionConfig, ArmSwingFeatureExtractionConfig
 from paradigma.imu_preprocessing import butterworth_filter
 from paradigma.preprocessing_config import IMUPreprocessingConfig
-from paradigma.windowing import tabulate_windows, create_segments, discard_segments
+from paradigma.windowing import tabulate_windows, create_segments, create_segment_df, discard_segments
 
-from pdathome.constants import classifiers, columns, descriptives, tiers_labels_map, \
-    tiers_rename, parameters, participant_ids, paths
+from pdathome.constants import GlobalConstants as gc, Mappings as mp
 from pdathome.load import load_stage_start_end, load_sensor_data, load_video_annotations
 from pdathome.utils import save_to_pickle
 
@@ -29,54 +28,54 @@ import numpy as np
 
 def prepare_data(subject):
     print(f"Time {datetime.datetime.now()} - {subject} - Preparing data ...")
-    with open(os.path.join(paths.PATH_CLINICAL_DATA, 'distribution_participants.json'), 'r') as f:
+    with open(os.path.join(gc.gc.paths.PATH_CLINICAL_DATA, 'distribution_participants.json'), 'r') as f:
         d_participant_distribution = json.load(f)
 
-    l_time_cols = [columns.TIME]
-    l_sensor_cols = columns.L_ACCELEROMETER + columns.L_GYROSCOPE
-    l_other_cols = [columns.FREE_LIVING_LABEL]
+    l_time_cols = [gc.columns.TIME]
+    l_sensor_cols = gc.columns.L_ACCELEROMETER + gc.columns.L_GYROSCOPE
+    l_other_cols = [gc.columns.FREE_LIVING_LABEL]
 
-    if subject in participant_ids.L_PD_IDS:
+    if subject in gc.participant_ids.L_PD_IDS:
         file_sensor_data = 'phys_cur_PD_merged.mat'
-        path_annotations = os.path.join(paths.PATH_ANNOTATIONS, 'pd')
-        l_other_cols += [columns.ARM_LABEL, columns.PRE_OR_POST]
+        path_annotations = os.path.join(gc.paths.PATH_ANNOTATIONS, 'pd')
+        l_other_cols += [gc.columns.ARM_LABEL, gc.columns.PRE_OR_POST]
     else:
         file_sensor_data = 'phys_cur_HC_merged.mat'
-        path_annotations = os.path.join(paths.PATH_ANNOTATIONS, 'controls')
+        path_annotations = os.path.join(gc.paths.PATH_ANNOTATIONS, 'controls')
 
-    if subject in participant_ids.L_TREMOR_IDS:
-        l_other_cols.append(columns.TREMOR_LABEL)
+    if subject in gc.participant_ids.L_TREMOR_IDS:
+        l_other_cols.append(gc.columns.TREMOR_LABEL)
 
     l_cols_to_export = l_time_cols + l_sensor_cols + l_other_cols
 
-    for side in [descriptives.MOST_AFFECTED_SIDE, descriptives.LEAST_AFFECTED_SIDE]:        
+    for side in [gc.descriptives.MOST_AFFECTED_SIDE, gc.descriptives.LEAST_AFFECTED_SIDE]:        
 
         ## loading_annotations
         wrist_pos = determine_wrist_pos(subject, side, d_participant_distribution)
-        df_sensors, peakstart, peakend = load_sensor_data(paths.PATH_SENSOR_DATA, file_sensor_data, 'phys', subject, wrist_pos)
+        df_sensors, peakstart, peakend = load_sensor_data(gc.paths.PATH_SENSOR_DATA, file_sensor_data, 'phys', subject, wrist_pos)
 
-        if subject in participant_ids.L_PD_IDS:
+        if subject in gc.participant_ids.L_PD_IDS:
             df_annotations_part_1, df_annotations_part_2 = load_video_annotations(path_annotations, subject)
             df_annotations = sync_video_annotations(df_annotations_part_1, df_annotations_part_2, peakstart, peakend)
         else:
             df_annotations = load_video_annotations(path_annotations, subject)
 
-        df_annotations = preprocess_video_annotations(df=df_annotations, code_label_map=tiers_labels_map, d_tier_rename=tiers_rename)
+        df_annotations = preprocess_video_annotations(df=df_annotations, code_label_map=mp.tiers_labels_map, d_tier_rename=mp.tiers_rename)
         
         ## merging
-        df_sensors[columns.SIDE] = side
+        df_sensors[gc.columns.SIDE] = side
 
         df_sensors = preprocess_sensor_data(df_sensors)
 
         df_sensors = attach_label_to_signal(df_sensors, df_annotations, 'label', 'tier', 'start_s', 'end_s')
 
-        if subject in participant_ids.L_PD_IDS:
-            if wrist_pos == descriptives.RIGHT_WRIST:
-                df_sensors[columns.ARM_LABEL] = df_sensors['right_arm_label']
+        if subject in gc.participant_ids.L_PD_IDS:
+            if wrist_pos == gc.descriptives.RIGHT_WRIST:
+                df_sensors[gc.columns.ARM_LABEL] = df_sensors['right_arm_label']
             else:
-                df_sensors[columns.ARM_LABEL] = df_sensors['left_arm_label']
+                df_sensors[gc.columns.ARM_LABEL] = df_sensors['left_arm_label']
 
-            df_sensors[columns.ARM_LABEL] = df_sensors[columns.ARM_LABEL].fillna('non_gait')
+            df_sensors[gc.columns.ARM_LABEL] = df_sensors[gc.columns.ARM_LABEL].fillna('non_gait')
 
         df_sensors = determine_med_stage(df=df_sensors, subject=subject,
                                          watch_side=side,
@@ -84,13 +83,13 @@ def prepare_data(subject):
         
         df_sensors = rotate_axes(df=df_sensors, subject=subject, wrist=wrist_pos)
 
-        df_sensors = df_sensors.loc[df_sensors[columns.FREE_LIVING_LABEL].notna()]
-        df_sensors = df_sensors.loc[df_sensors[columns.FREE_LIVING_LABEL]!='Unknown']
-        df_sensors = df_sensors.loc[df_sensors[columns.PRE_OR_POST].notna()]
+        df_sensors = df_sensors.loc[df_sensors[gc.columns.FREE_LIVING_LABEL].notna()]
+        df_sensors = df_sensors.loc[df_sensors[gc.columns.FREE_LIVING_LABEL]!='Unknown']
+        df_sensors = df_sensors.loc[df_sensors[gc.columns.PRE_OR_POST].notna()]
         df_sensors = df_sensors.reset_index(drop=True)
 
         l_drop_cols = ['clinical_tests_label']
-        if subject in participant_ids.L_PD_IDS:
+        if subject in gc.participant_ids.L_PD_IDS:
             l_drop_cols += ['med_and_motor_status_label', 'left_arm_label', 'right_arm_label']
 
         df_sensors = df_sensors.drop(columns=l_drop_cols)
@@ -98,20 +97,20 @@ def prepare_data(subject):
         # temporarily store as pickle until tsdf issue is resolved
         save_to_pickle(
             df=df_sensors[l_cols_to_export],
-            path=paths.PATH_PREPARED_DATA,
+            path=gc.paths.PATH_PREPARED_DATA,
             filename=f'{subject}_{side}.pkl'
         )
 
 
 def preprocess_gait_detection(subject):
-    for side in [descriptives.MOST_AFFECTED_SIDE, descriptives.LEAST_AFFECTED_SIDE]:
+    for side in [gc.descriptives.MOST_AFFECTED_SIDE, gc.descriptives.LEAST_AFFECTED_SIDE]:
         print(f"Time {datetime.datetime.now()} - {subject} {side} - Preprocessing gait ...")
-        df = pd.read_pickle(os.path.join(paths.PATH_PREPARED_DATA, f'{subject}_{side}.pkl'))
+        df = pd.read_pickle(os.path.join(gc.paths.PATH_PREPARED_DATA, f'{subject}_{side}.pkl'))
 
         config = IMUPreprocessingConfig()
         config.acceleration_units = 'g'
 
-        # Extract relevant columns for accelerometer data
+        # Extract relevant gc.columns for accelerometer data
         accel_cols = list(config.d_channels_accelerometer.keys())
 
         # Change to correct units [g]
@@ -128,52 +127,69 @@ def preprocess_gait_detection(subject):
                     order=config.filter_order,
                     cutoff_frequency=config.lower_cutoff_frequency,
                     passband=passband,
-                    sampling_frequency=parameters.DOWNSAMPLED_FREQUENCY
+                    sampling_frequency=gc.parameters.DOWNSAMPLED_FREQUENCY
                 )
 
-        # Drop original accelerometer columns and append filtered results
+        # Drop original accelerometer gc.columns and append filtered results
         df = df.drop(columns=accel_cols).rename(columns={f'filt_{col}': col for col in accel_cols})
 
+        # Add segment number based on video-annotated labels --
+        # only need to do this once
+        if side == gc.descriptives.MOST_AFFECTED_SIDE:
+            
+            df[gc.columns.TRUE_GAIT_SEGMENT_NR] = create_segments(
+                df=df.loc[df['gait_boolean'] == 1],
+                time_column_name=gc.columns.TIME,
+                gap_threshold_s=1.5
+            )
+
+            df_segments = create_segment_df(
+                df=df,
+                time_column_name=gc.columns.TIME,
+                segment_nr_colname=gc.columns.TRUE_GAIT_SEGMENT_NR,
+            )
+
+            df_segments.to_pickle(os.path.join(gc.paths.PATH_PREPROCESSED_DATA, 'misc', f'{subject}_segments_true_gait.pkl'))
 
         config = GaitFeatureExtractionConfig()
 
-        config.l_data_point_level_cols += [columns.TIME, columns.FREE_LIVING_LABEL]
-        l_ts_cols = [columns.TIME, columns.WINDOW_NR, columns.FREE_LIVING_LABEL]
-        l_export_cols = [columns.TIME, columns.WINDOW_NR, columns.ACTIVITY_LABEL_MAJORITY_VOTING, columns.GAIT_MAJORITY_VOTING] + list(config.d_channels_values.keys())
+        config.l_data_point_level_cols += [gc.columns.TIME,gc.columns.FREE_LIVING_LABEL]
+        l_ts_cols = [gc.columns.TIME, gc.columns.WINDOW_NR, gc.columns.FREE_LIVING_LABEL]
+        l_export_cols = [gc.columns.TIME, gc.columns.WINDOW_NR, gc.columns.ACTIVITY_LABEL_MAJORITY_VOTING, gc.columns.GAIT_MAJORITY_VOTING] + list(config.d_channels_values.keys())
         l_single_value_cols = None
-        if subject in participant_ids.L_PD_IDS:
-            config.l_data_point_level_cols.append(columns.ARM_LABEL)
-            l_ts_cols += [columns.PRE_OR_POST, columns.ARM_LABEL]
-            l_export_cols += [columns.PRE_OR_POST, columns.ARM_LABEL_MAJORITY_VOTING]
-            l_single_value_cols = [columns.PRE_OR_POST]
-        if subject in participant_ids.L_TREMOR_IDS:
-            config.l_data_point_level_cols.append(columns.TREMOR_LABEL)
-            l_ts_cols.append(columns.TREMOR_LABEL)
+        if subject in gc.participant_ids.L_PD_IDS:
+            config.l_data_point_level_cols.append(gc.columns.ARM_LABEL)
+            l_ts_cols += [gc.columns.PRE_OR_POST, gc.columns.ARM_LABEL]
+            l_export_cols += [gc.columns.PRE_OR_POST, gc.columns.ARM_LABEL_MAJORITY_VOTING]
+            l_single_value_cols = [gc.columns.PRE_OR_POST]
+        if subject in gc.participant_ids.L_TREMOR_IDS:
+            config.l_data_point_level_cols.append(gc.columns.TREMOR_LABEL)
+            l_ts_cols.append(gc.columns.TREMOR_LABEL)
 
 
         df_windowed = tabulate_windows(
                 df=df,
-                window_size=config.window_length_s * parameters.DOWNSAMPLED_FREQUENCY,
-                step_size=config.window_step_size_s * parameters.DOWNSAMPLED_FREQUENCY,
-                time_column_name=columns.TIME,
+                window_size=config.window_length_s * gc.parameters.DOWNSAMPLED_FREQUENCY,
+                step_size=config.window_step_size_s * gc.parameters.DOWNSAMPLED_FREQUENCY,
+                time_column_name=gc.columns.TIME,
                 single_value_cols=l_single_value_cols,
                 list_value_cols=config.l_data_point_level_cols,
                 agg_func='first',
         )
         
         # store windows with timestamps for later use
-        df_windowed[l_ts_cols].to_pickle(os.path.join(paths.PATH_GAIT_FEATURES, f'{subject}_{side}_ts.pkl'))
+        df_windowed[l_ts_cols].to_pickle(os.path.join(gc.paths.PATH_GAIT_FEATURES, f'{subject}_{side}_ts.pkl'))
 
         # Determine most prevalent activity
-        df_windowed[columns.ACTIVITY_LABEL_MAJORITY_VOTING] = df_windowed[columns.FREE_LIVING_LABEL].apply(lambda x: pd.Series(x).mode()[0])
+        df_windowed[gc.columns.ACTIVITY_LABEL_MAJORITY_VOTING] = df_windowed[gc.columns.FREE_LIVING_LABEL].apply(lambda x: pd.Series(x).mode()[0])
 
         # Determine if the majority of the window is walking
-        df_windowed[columns.GAIT_MAJORITY_VOTING] = df_windowed[columns.FREE_LIVING_LABEL].apply(lambda x: x.count('Walking') >= len(x)/2)
+        df_windowed[gc.columns.GAIT_MAJORITY_VOTING] = df_windowed[gc.columns.FREE_LIVING_LABEL].apply(lambda x: x.count('Walking') >= len(x)/2)
 
-        if subject in participant_ids.L_PD_IDS:
-            df_windowed[columns.ARM_LABEL_MAJORITY_VOTING] = df_windowed[columns.ARM_LABEL].apply(lambda x: arm_label_majority_voting(config, x))
+        if subject in gc.participant_ids.L_PD_IDS:
+            df_windowed[gc.columns.ARM_LABEL_MAJORITY_VOTING] = df_windowed[gc.columns.ARM_LABEL].apply(lambda x: arm_label_majority_voting(config, x))
 
-        df_windowed = df_windowed.drop(columns=[x for x in l_ts_cols if x not in [columns.WINDOW_NR, columns.PRE_OR_POST]])
+        df_windowed = df_windowed.drop(columns=[x for x in l_ts_cols if x not in [gc.columns.WINDOW_NR, gc.columns.PRE_OR_POST]])
 
         # compute statistics of the temporal domain signals
         df_windowed = extract_temporal_domain_features(
@@ -193,36 +209,36 @@ def preprocess_gait_detection(subject):
 
         save_to_pickle(
             df=df_windowed[l_export_cols],
-            path=paths.PATH_GAIT_FEATURES,
+            path=gc.paths.PATH_GAIT_FEATURES,
             filename=f'{subject}_{side}.pkl'
         )
 
 
 def preprocess_filtering_gait(subject):
-    for side in [descriptives.MOST_AFFECTED_SIDE, descriptives.LEAST_AFFECTED_SIDE]:
+    for side in [gc.descriptives.MOST_AFFECTED_SIDE, gc.descriptives.LEAST_AFFECTED_SIDE]:
         print(f"Time {datetime.datetime.now()} - {subject} {side} - Processing ...")
-        df_pred = pd.read_pickle(os.path.join(paths.PATH_GAIT_PREDICTIONS, classifiers.GAIT_DETECTION_CLASSIFIER_SELECTED, f'{subject}.pkl'))
+        df_pred = pd.read_pickle(os.path.join(gc.paths.PATH_GAIT_PREDICTIONS, gc.classifiers.GAIT_DETECTION_CLASSIFIER_SELECTED, f'{subject}.pkl'))
 
-        with open(os.path.join(paths.PATH_THRESHOLDS, 'gait', f'{classifiers.GAIT_DETECTION_CLASSIFIER_SELECTED}.txt'), 'r') as f:
+        with open(os.path.join(gc.paths.PATH_THRESHOLDS, 'gait', f'{gc.classifiers.GAIT_DETECTION_CLASSIFIER_SELECTED}.txt'), 'r') as f:
             threshold = float(f.read())
 
-        # Configure columns based on cohort
-        if subject in participant_ids.L_PD_IDS:
-            l_cols_to_export = [columns.TIME, columns.SEGMENT_NR, columns.WINDOW_NR, columns.ARM_LABEL, columns.PRE_OR_POST]
+        # Configure gc.columns based on cohort
+        if subject in gc.participant_ids.L_PD_IDS:
+            l_cols_to_export = [gc.columns.TIME, gc.columns.PRED_GAIT_SEGMENT_NR, gc.columns.WINDOW_NR, gc.columns.ARM_LABEL, gc.columns.PRE_OR_POST]
         else:
-            l_cols_to_export = [columns.TIME, columns.SEGMENT_NR, columns.WINDOW_NR]
+            l_cols_to_export = [gc.columns.TIME, gc.columns.PRED_GAIT_SEGMENT_NR, gc.columns.WINDOW_NR]
 
         # Load sensor data
-        df_sensors = pd.read_pickle(os.path.join(paths.PATH_PREPARED_DATA, f'{subject}_{side}.pkl'))
-        df_pred_side = df_pred.loc[df_pred[columns.SIDE]==side].copy()
+        df_sensors = pd.read_pickle(os.path.join(gc.paths.PATH_PREPARED_DATA, f'{subject}_{side}.pkl'))
+        df_pred_side = df_pred.loc[df_pred[gc.columns.SIDE]==side].copy()
 
         imu_config = IMUPreprocessingConfig()
         arm_activity_config = ArmSwingFeatureExtractionConfig()
 
         imu_config.acceleration_units = 'g'
-        arm_activity_config.l_data_point_level_cols += [columns.TIME]
+        arm_activity_config.l_data_point_level_cols += [gc.columns.TIME]
 
-        # Extract relevant columns for accelerometer data
+        # Extract relevant gc.columns for accelerometer data
         accel_cols = list(imu_config.d_channels_accelerometer.keys())
 
         # Change to correct units [g]
@@ -239,126 +255,136 @@ def preprocess_filtering_gait(subject):
                     sampling_frequency=imu_config.sampling_frequency
                 )
 
-        # Drop original accelerometer columns
+        # Drop original accelerometer gc.columns
         df_sensors = df_sensors.drop(columns=accel_cols).rename(columns={f'filt_{col}': col for col in accel_cols})
 
         # Merge sensor data with predictions
-        l_merge_cols = [columns.TIME, columns.FREE_LIVING_LABEL]
-        if subject in participant_ids.L_PD_IDS:
-            l_merge_cols.append(columns.ARM_LABEL)
-            if columns.PRE_OR_POST in df_pred_side.columns:
-                l_merge_cols.append(columns.PRE_OR_POST)
+        l_merge_cols = [gc.columns.TIME, gc.columns.FREE_LIVING_LABEL]
+        if subject in gc.participant_ids.L_PD_IDS:
+            l_merge_cols.append(gc.columns.ARM_LABEL)
+            if gc.columns.PRE_OR_POST in df_pred_side.columns:
+                l_merge_cols.append(gc.columns.PRE_OR_POST)
 
         df = pd.merge(left=df_pred_side, right=df_sensors, how='left', on=l_merge_cols).reset_index(drop=True)
 
         # Process free living label and remove nans
-        df['gait_boolean'] = (df[columns.FREE_LIVING_LABEL] == 'Walking').astype(int)
-        df = df.dropna(subset=columns.L_GYROSCOPE)
+        df['gait_boolean'] = (df[gc.columns.FREE_LIVING_LABEL] == 'Walking').astype(int)
+        df = df.dropna(subset=gc.columns.L_GYROSCOPE)
             
         # Apply threshold and filter data
-        df[columns.PRED_GAIT] = (df[columns.PRED_GAIT_PROBA] >= threshold).astype(int)
+        df[gc.columns.PRED_GAIT] = (df[gc.columns.PRED_GAIT_PROBA] >= threshold).astype(int)
 
         # Perform principal component analysis on the gyroscope signals to obtain the angular velocity in the
         # direction of the swing of the arm 
-        df[columns.VELOCITY] = pca_transform_gyroscope(
+        df[gc.columns.VELOCITY] = pca_transform_gyroscope(
             df=df,
-            y_gyro_colname=columns.GYROSCOPE_Y,
-            z_gyro_colname=columns.GYROSCOPE_Z,
-            pred_gait_colname=columns.PRED_GAIT
+            y_gyro_colname=gc.columns.GYROSCOPE_Y,
+            z_gyro_colname=gc.columns.GYROSCOPE_Z,
+            pred_gait_colname=gc.columns.PRED_GAIT
         )
 
         # Integrate the angular velocity to obtain an estimation of the angle
-        df[columns.ANGLE] = compute_angle(
-            velocity_col=df[columns.VELOCITY],
-            time_col=df[columns.TIME]
+        df[gc.columns.ANGLE] = compute_angle(
+            velocity_col=df[gc.columns.VELOCITY],
+            time_col=df[gc.columns.TIME]
         )
 
         # Remove the moving average from the angle to account for possible drift caused by the integration
         # of noise in the angular velocity
-        df[columns.ANGLE_SMOOTH] = remove_moving_average_angle(
-            angle_col=df[columns.ANGLE],
+        df[gc.columns.ANGLE_SMOOTH] = remove_moving_average_angle(
+            angle_col=df[gc.columns.ANGLE],
             sampling_frequency=arm_activity_config.sampling_frequency
         )
         
         # Filter unobserved data
-        if subject in participant_ids.L_PD_IDS:
-            df = df[df[columns.ARM_LABEL] != 'cant assess']
+        if subject in gc.participant_ids.L_PD_IDS:
+            df = df[df[gc.columns.ARM_LABEL] != 'cant assess']
         
         # Use only predicted gait for the subsequent steps
-        df = df[df[columns.PRED_GAIT] == 1].reset_index(drop=True)
+        df = df[df[gc.columns.PRED_GAIT] == 1].reset_index(drop=True)
 
         # Group consecutive timestamps into segments with new segments starting after a pre-specified gap
-        df[columns.SEGMENT_NR] = create_segments(
+        df[gc.columns.PRED_GAIT_SEGMENT_NR] = create_segments(
             df=df,
-            time_column_name=columns.TIME,
-            segment_column_name=columns.SEGMENT_NR,
+            time_column_name=gc.columns.TIME,
             gap_threshold_s=arm_activity_config.window_length_s
         )
+
+        # Add segment number based on predicted labels --
+        # only need to do this once
+        if side == gc.descriptives.MOST_AFFECTED_SIDE:
+            df_segments = create_segment_df(
+                df=df,
+                time_column_name=gc.columns.TIME,
+                segment_nr_colname=gc.columns.PRED_GAIT_SEGMENT_NR,
+            )
+
+            df_segments.to_pickle(os.path.join(gc.paths.PATH_PREPROCESSED_DATA, 'misc', f'{subject}_segments_pred_gait.pkl'))
 
         # Remove any segments that do not adhere to predetermined criteria
         df = discard_segments(
             df=df,
-            segment_nr_colname=columns.SEGMENT_NR,
+            segment_nr_colname=gc.columns.PRED_GAIT_SEGMENT_NR,
             min_length_segment_s=arm_activity_config.window_length_s,
             sampling_frequency=arm_activity_config.sampling_frequency
         )
 
         # Create windows of fixed length and step size from the time series
-        l_single_value_cols = [columns.SEGMENT_NR]
-
-        if subject in participant_ids.L_PD_IDS:
-            l_single_value_cols.append(columns.PRE_OR_POST)
-            arm_activity_config.l_data_point_level_cols.append(columns.ARM_LABEL)
+        if subject in gc.participant_ids.L_PD_IDS:
+            l_single_value_cols = gc.columns.PRE_OR_POST
+            arm_activity_config.l_data_point_level_cols.append(gc.columns.ARM_LABEL)
+        else:
+            l_single_value_cols = None
 
         l_dfs = [
             tabulate_windows(
-                df=df[df[columns.SEGMENT_NR] == segment_nr].reset_index(drop=True),
+                df=df[df[gc.columns.PRED_GAIT_SEGMENT_NR] == segment_nr].reset_index(drop=True),
                 window_size=int(arm_activity_config.window_length_s * arm_activity_config.sampling_frequency),
                 step_size=int(arm_activity_config.window_step_size_s * arm_activity_config.sampling_frequency),
-                time_column_name=columns.TIME,
+                time_column_name=gc.columns.TIME,
                 list_value_cols=arm_activity_config.l_data_point_level_cols,
                 single_value_cols=l_single_value_cols,
             )
-            for segment_nr in df[columns.SEGMENT_NR].unique()
+            for segment_nr in df[gc.columns.PRED_GAIT_SEGMENT_NR].unique()
         ]
         l_dfs = [df for df in l_dfs if not df.empty]
 
         df_windowed = pd.concat(l_dfs).reset_index(drop=True)
 
         # Save windows with timestamps for later use
-        df_windowed[l_cols_to_export].to_pickle(os.path.join(paths.PATH_ARM_ACTIVITY_FEATURES, f'{subject}_{side}_ts.pkl'))
+        df_windowed[l_cols_to_export].to_pickle(os.path.join(gc.paths.PATH_ARM_ACTIVITY_FEATURES, f'{subject}_{side}_ts.pkl'))
 
-        df_windowed = df_windowed.drop(columns=[columns.TIME])
+        df_windowed = df_windowed.drop(columns=[gc.columns.TIME])
 
         # Majority voting for labels per window
-        if subject in participant_ids.L_PD_IDS:
-            df_windowed[columns.OTHER_ARM_ACTIVITY_MAJORITY_VOTING] = df_windowed[columns.ARM_LABEL].apply(lambda x: x.count('Gait without other behaviours or other positions') < len(x)/2)
-            df_windowed[columns.ARM_LABEL_MAJORITY_VOTING] = df_windowed[columns.ARM_LABEL].apply(lambda x: arm_label_majority_voting(arm_activity_config, x))
-            df_windowed = df_windowed.drop(columns=[columns.ARM_LABEL])
+        if subject in gc.participant_ids.L_PD_IDS:
+            df_windowed[gc.columns.OTHER_ARM_ACTIVITY_MAJORITY_VOTING] = df_windowed[gc.columns.ARM_LABEL].apply(lambda x: x.count('Gait without other behaviours or other positions') < len(x)/2)
+            df_windowed[gc.columns.ARM_LABEL_MAJORITY_VOTING] = df_windowed[gc.columns.ARM_LABEL].apply(lambda x: arm_label_majority_voting(arm_activity_config, x))
+            df_windowed = df_windowed.drop(columns=[gc.columns.ARM_LABEL])
 
         # Transform the angle from the temporal domain to the spectral domain using the fast fourier transform
-        df_windowed[f'{columns.ANGLE}_freqs'], df_windowed[f'{columns.ANGLE}_fft'] = signal_to_ffts(
-            sensor_col=df_windowed[columns.ANGLE_SMOOTH],
+        df_windowed[f'{gc.columns.ANGLE}_freqs'], df_windowed[f'{gc.columns.ANGLE}_fft'] = signal_to_ffts(
+            sensor_col=df_windowed[gc.columns.ANGLE_SMOOTH],
             window_type=arm_activity_config.window_type,
             sampling_frequency=arm_activity_config.sampling_frequency
         )
 
         # Obtain the dominant frequency of the angle signal in the frequency band of interest
         # defined by the highest peak in the power spectrum
-        df_windowed[f'{columns.ANGLE}_dominant_frequency'] = df_windowed.apply(
+        df_windowed[f'{gc.columns.ANGLE}_dominant_frequency'] = df_windowed.apply(
             lambda x: get_dominant_frequency(
-                signal_ffts=x[f'{columns.ANGLE}_fft'],
-                signal_freqs=x[f'{columns.ANGLE}_freqs'],
+                signal_ffts=x[f'{gc.columns.ANGLE}_fft'],
+                signal_freqs=x[f'{gc.columns.ANGLE}_freqs'],
                 fmin=arm_activity_config.power_band_low_frequency,
                 fmax=arm_activity_config.power_band_high_frequency
                 ),
                 axis=1
         )
 
-        df_windowed = df_windowed.drop(columns=[f'{columns.ANGLE}_fft', f'{columns.ANGLE}_freqs'])
+        df_windowed = df_windowed.drop(columns=[f'{gc.columns.ANGLE}_fft', f'{gc.columns.ANGLE}_freqs'])
 
         # Compute the percentage of power in the frequency band of interest (i.e., the frequency band of the arm swing)
-        df_windowed[f'{columns.ANGLE}_perc_power'] = df_windowed[columns.ANGLE_SMOOTH].apply(
+        df_windowed[f'{gc.columns.ANGLE}_perc_power'] = df_windowed[gc.columns.ANGLE_SMOOTH].apply(
             lambda x: compute_perc_power(
                 sensor_col=x,
                 fmin_band=arm_activity_config.power_band_low_frequency,
@@ -373,24 +399,24 @@ def preprocess_filtering_gait(subject):
         # Determine the extrema (minima and maxima) of the angle signal
         extract_angle_extremes(
             df=df_windowed,
-            angle_colname=columns.ANGLE_SMOOTH,
-            dominant_frequency_colname=f'{columns.ANGLE}_dominant_frequency',
+            angle_colname=gc.columns.ANGLE_SMOOTH,
+            dominant_frequency_colname=f'{gc.columns.ANGLE}_dominant_frequency',
             sampling_frequency=arm_activity_config.sampling_frequency
         )
 
         # Calculate the change in angle between consecutive extrema (minima and maxima) of the angle signal inside the window
-        df_windowed[f'{columns.ANGLE}_amplitudes'] = extract_range_of_motion(angle_extrema_values_col=df_windowed[f'{columns.ANGLE}_extrema_values'])
+        df_windowed[f'{gc.columns.ANGLE}_amplitudes'] = extract_range_of_motion(angle_extrema_values_col=df_windowed[f'{gc.columns.ANGLE}_extrema_values'])
 
         # Aggregate the changes in angle between consecutive extrema to obtain the range of motion
-        df_windowed['range_of_motion'] = df_windowed[f'{columns.ANGLE}_amplitudes'].apply(lambda x: np.mean(x) if len(x) > 0 else 0).replace(np.nan, 0)
-        df_windowed = df_windowed.drop(columns=[f'{columns.ANGLE}_amplitudes'])
+        df_windowed['range_of_motion'] = df_windowed[f'{gc.columns.ANGLE}_amplitudes'].apply(lambda x: np.mean(x) if len(x) > 0 else 0).replace(np.nan, 0)
+        df_windowed = df_windowed.drop(columns=[f'{gc.columns.ANGLE}_amplitudes'])
 
         # Compute the forward and backward peak angular velocity using the extrema of the angular velocity
         extract_peak_angular_velocity(
             df=df_windowed,
-            velocity_colname=columns.VELOCITY,
-            angle_minima_colname=f'{columns.ANGLE}_minima',
-            angle_maxima_colname=f'{columns.ANGLE}_maxima'
+            velocity_colname=gc.columns.VELOCITY,
+            angle_minima_colname=f'{gc.columns.ANGLE}_minima',
+            angle_maxima_colname=f'{gc.columns.ANGLE}_maxima'
         )
 
         # Compute aggregated measures of the peak angular velocity
@@ -404,33 +430,33 @@ def preprocess_filtering_gait(subject):
 
         # Transform the accelerometer and gyroscope signals from the temporal domain to the spectral domain
         # using the fast fourier transform and extract spectral features
-        for sensor, l_sensor_colnames in zip(['accelerometer', 'gyroscope'], [columns.L_ACCELEROMETER, columns.L_GYROSCOPE]):
+        for sensor, l_sensor_colnames in zip(['accelerometer', 'gyroscope'], [gc.columns.L_ACCELEROMETER, gc.columns.L_GYROSCOPE]):
             df_windowed = extract_spectral_domain_features(arm_activity_config, df_windowed, sensor, l_sensor_colnames)
         
         df_windowed.fillna(0, inplace=True)
-        df_windowed[columns.SIDE] = side
+        df_windowed[gc.columns.SIDE] = side
 
-        l_export_cols = [columns.TIME, columns.SEGMENT_NR, columns.WINDOW_NR] + list(arm_activity_config.d_channels_values.keys())
+        l_export_cols = [gc.columns.TIME, gc.columns.WINDOW_NR] + list(arm_activity_config.d_channels_values.keys())
 
-        if subject in participant_ids.L_PD_IDS:
-            l_export_cols += [columns.PRE_OR_POST, columns.ARM_LABEL_MAJORITY_VOTING, columns.OTHER_ARM_ACTIVITY_MAJORITY_VOTING]
+        if subject in gc.participant_ids.L_PD_IDS:
+            l_export_cols += [gc.columns.PRE_OR_POST, gc.columns.ARM_LABEL_MAJORITY_VOTING, gc.columns.OTHER_ARM_ACTIVITY_MAJORITY_VOTING]
 
         save_to_pickle(
             df=df_windowed[l_export_cols],
-            path=paths.PATH_ARM_ACTIVITY_FEATURES,
+            path=gc.paths.PATH_ARM_ACTIVITY_FEATURES,
             filename=f'{subject}_{side}.pkl'
         )
 
 
 def determine_wrist_pos(subject, watch_side, d_participant_distribution):
-    if watch_side == descriptives.MOST_AFFECTED_SIDE and subject in d_participant_distribution['most_affected']['right']:
-        return descriptives.RIGHT_WRIST
-    elif watch_side == descriptives.MOST_AFFECTED_SIDE and subject in d_participant_distribution['most_affected']['left']:
-        return descriptives.LEFT_WRIST
-    elif watch_side == descriptives.LEAST_AFFECTED_SIDE and subject in d_participant_distribution['least_affected']['right']:
-        return descriptives.RIGHT_WRIST
+    if watch_side == gc.descriptives.MOST_AFFECTED_SIDE and subject in d_participant_distribution['most_affected']['right']:
+        return gc.descriptives.RIGHT_WRIST
+    elif watch_side == gc.descriptives.MOST_AFFECTED_SIDE and subject in d_participant_distribution['most_affected']['left']:
+        return gc.descriptives.LEFT_WRIST
+    elif watch_side == gc.descriptives.LEAST_AFFECTED_SIDE and subject in d_participant_distribution['least_affected']['right']:
+        return gc.descriptives.RIGHT_WRIST
     else:
-        return descriptives.LEFT_WRIST
+        return gc.descriptives.LEFT_WRIST
     
 
 def sync_video_annotations(df_annotations_part_1, df_annotations_part_2, peakstart, peakend):
@@ -461,7 +487,7 @@ def preprocess_video_annotations(df, code_label_map, d_tier_rename):
         else:
             df.loc[df['tier']==tier, 'label'] = df.loc[df['tier']==tier, 'code'].map(code_label_map[tier])
 
-    if 'start' in df.columns:
+    if 'start' in df.gc.columns:
         for moment in ['start', 'end']:
             df[moment+'_s'] = df[moment].copy()
 
@@ -477,18 +503,18 @@ def preprocess_video_annotations(df, code_label_map, d_tier_rename):
 
 
 def preprocess_sensor_data(df_sensors):
-    df_sensors[columns.TIME+'_s'] = df_sensors[columns.TIME].copy()
-    df_sensors[columns.TIME+'_dt'] = df_sensors[columns.TIME+'_s'].apply(lambda x: datetime.datetime.fromtimestamp(x))
-    df_sensors = df_sensors.resample(str(1/parameters.SAMPLING_FREQUENCY)+'s', on=columns.TIME+'_dt').first().reset_index()
-    df_sensors[columns.TIME] = df_sensors[columns.TIME+'_dt'].apply(lambda x: x.timestamp())
-    df_sensors = df_sensors.drop(columns=[columns.TIME+'_dt', columns.TIME+'_s'])
-    df_sensors[columns.TIME] = df_sensors[columns.TIME] - df_sensors[columns.TIME].min()    
+    df_sensors[gc.columns.TIME+'_s'] = df_sensors[gc.columns.TIME].copy()
+    df_sensors[gc.columns.TIME+'_dt'] = df_sensors[gc.columns.TIME+'_s'].apply(lambda x: datetime.datetime.fromtimestamp(x))
+    df_sensors = df_sensors.resample(str(1/gc.parameters.SAMPLING_FREQUENCY)+'s', on=gc.columns.TIME+'_dt').first().reset_index()
+    df_sensors[gc.columns.TIME] = df_sensors[gc.columns.TIME+'_dt'].apply(lambda x: x.timestamp())
+    df_sensors = df_sensors.drop(columns=[gc.columns.TIME+'_dt', gc.columns.TIME+'_s'])
+    df_sensors[gc.columns.TIME] = df_sensors[gc.columns.TIME] - df_sensors[gc.columns.TIME].min()    
 
-    for col in columns.L_ACCELEROMETER:
+    for col in gc.columns.L_ACCELEROMETER:
         cs = CubicSpline(
             df_sensors.loc[
                 df_sensors[col].isna()==False,
-                columns.TIME
+                gc.columns.TIME
                 ],
              df_sensors.loc[
                 df_sensors[col].isna()==False,
@@ -502,11 +528,11 @@ def preprocess_sensor_data(df_sensors):
             ] = cs(
             df_sensors.loc[
                 df_sensors[col].isna()==True,
-                columns.TIME
+                gc.columns.TIME
                 ]
             )
         
-    downsample_rate = parameters.DOWNSAMPLED_FREQUENCY/parameters.SAMPLING_FREQUENCY
+    downsample_rate = gc.parameters.DOWNSAMPLED_FREQUENCY/gc.parameters.SAMPLING_FREQUENCY
 
     df_sensors = df_sensors[0::int(1/downsample_rate)]
 
@@ -518,7 +544,7 @@ def attach_label_to_signal(df_sensors, df_labels, label_column, tier_column, sta
         l_tiers = df_labels[tier_column].unique()
     for tier in l_tiers:
         for _, row in df_labels.loc[df_labels[tier_column]==tier].iterrows():
-            df_sensors.loc[(df_sensors[columns.TIME] >= row[start_column]) & (df_sensors[columns.TIME] < row[end_column]), '{}_label'.format(tier)] = row[label_column]
+            df_sensors.loc[(df_sensors[gc.columns.TIME] >= row[start_column]) & (df_sensors[gc.columns.TIME] < row[end_column]), '{}_label'.format(tier)] = row[label_column]
 
     df_sensors = df_sensors.reset_index(drop=True)
     return df_sensors
@@ -527,11 +553,11 @@ def attach_label_to_signal(df_sensors, df_labels, label_column, tier_column, sta
 def determine_med_stage(df, subject, watch_side, path_annotations):
     prestart, preend, poststart, postend = load_stage_start_end(path_annotations, subject)
 
-    if subject == 'hbv051' and watch_side == descriptives.MOST_AFFECTED_SIDE:
-        df = df.loc[df[columns.TIME]>=5491.138] 
+    if subject == 'hbv051' and watch_side == gc.descriptives.MOST_AFFECTED_SIDE:
+        df = df.loc[df[gc.columns.TIME]>=5491.138] 
 
-    df[columns.PRE_OR_POST] = df.apply(lambda x: 'pre' if x[columns.TIME] >= prestart and x[columns.TIME] <= preend else 
-                                        'post' if x[columns.TIME] >= poststart and x[columns.TIME] <= postend else
+    df[gc.columns.PRE_OR_POST] = df.apply(lambda x: 'pre' if x[gc.columns.TIME] >= prestart and x[gc.columns.TIME] <= preend else 
+                                        'post' if x[gc.columns.TIME] >= poststart and x[gc.columns.TIME] <= postend else
                                         np.nan, axis=1)
     
     return df
@@ -544,26 +570,26 @@ def rotate_axes(df, subject, wrist):
         df = df.drop(columns=[f'{sensor}_x'])
         df = df.rename(columns={f'{sensor}_x_new': f'{sensor}_x'})
 
-    if wrist == descriptives.LEFT_WRIST and subject in participant_ids.L_L_NORMAL:
-        df[columns.ACCELEROMETER_Y] *= -1
-    elif wrist == descriptives.LEFT_WRIST and subject not in participant_ids.L_L_NORMAL:
-        df[columns.ACCELEROMETER_X] *= -1
-        df[columns.GYROSCOPE_X] *= -1
-        df[columns.GYROSCOPE_Y] *= -1
-    elif wrist == descriptives.RIGHT_WRIST and subject in participant_ids.L_R_NORMAL:
-        df[columns.ACCELEROMETER_X] *= -1
-        df[columns.ACCELEROMETER_Y] *= -1
-        df[columns.GYROSCOPE_Z] *= -1
-        df[columns.GYROSCOPE_Y] *= -1
-    elif wrist == descriptives.RIGHT_WRIST and subject not in participant_ids.L_R_NORMAL:
-        df[columns.GYROSCOPE_X] *= -1
-        df[columns.GYROSCOPE_Z] *= -1
+    if wrist == gc.descriptives.LEFT_WRIST and subject in gc.participant_ids.L_L_NORMAL:
+        df[gc.columns.ACCELEROMETER_Y] *= -1
+    elif wrist == gc.descriptives.LEFT_WRIST and subject not in gc.participant_ids.L_L_NORMAL:
+        df[gc.columns.ACCELEROMETER_X] *= -1
+        df[gc.columns.GYROSCOPE_X] *= -1
+        df[gc.columns.GYROSCOPE_Y] *= -1
+    elif wrist == gc.descriptives.RIGHT_WRIST and subject in gc.participant_ids.L_R_NORMAL:
+        df[gc.columns.ACCELEROMETER_X] *= -1
+        df[gc.columns.ACCELEROMETER_Y] *= -1
+        df[gc.columns.GYROSCOPE_Z] *= -1
+        df[gc.columns.GYROSCOPE_Y] *= -1
+    elif wrist == gc.descriptives.RIGHT_WRIST and subject not in gc.participant_ids.L_R_NORMAL:
+        df[gc.columns.GYROSCOPE_X] *= -1
+        df[gc.columns.GYROSCOPE_Z] *= -1
 
     return df
 
 
 def arm_label_majority_voting(config, arm_label):
     non_nan_count = sum(~pd.isna(arm_label))
-    if non_nan_count > config.window_length_s * parameters.DOWNSAMPLED_FREQUENCY / 2:
+    if non_nan_count > config.window_length_s * gc.parameters.DOWNSAMPLED_FREQUENCY / 2:
         return Counter(arm_label).most_common(1)[0][0]
     return np.nan

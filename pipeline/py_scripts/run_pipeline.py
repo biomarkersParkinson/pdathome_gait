@@ -4,7 +4,7 @@ import sys
 from functools import partial
 from multiprocessing import Pool
 
-from pdathome.constants import classifiers
+from pdathome.constants import GlobalConstants as gc
 from pdathome.classification import train_test_gait_detection, train_test_filtering_gait, store_gait_detection, store_filtering_gait
 from pdathome.preprocessing import prepare_data, preprocess_gait_detection, preprocess_filtering_gait
 
@@ -47,8 +47,8 @@ if __name__ == '__main__':
     l_ids = sys.argv[3:]      # List of ids to process
 
     # Choose which classifiers to run
-    gd_classifiers = [classifiers.GAIT_DETECTION_CLASSIFIER_SELECTED]
-    fg_classifiers = [classifiers.ARM_ACTIVITY_CLASSIFIER_SELECTED]
+    gd_classifiers = [gc.classifiers.GAIT_DETECTION_CLASSIFIER_SELECTED]
+    fg_classifiers = [gc.classifiers.ARM_ACTIVITY_CLASSIFIER_SELECTED]
 
     # No need for nested parallelization
     n_jobs = 1
