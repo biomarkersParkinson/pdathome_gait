@@ -3,7 +3,7 @@ import os
 import pandas as pd
 import numpy as np
 
-from pdathome.constants import GlobalConstants as gc
+from pdathome.constants import global_constants as gc
 
 def load_sensor_data(path, file_name, tab, subject, wrist_pos):
     with h5py.File(os.path.join(path, file_name)) as opened_file:

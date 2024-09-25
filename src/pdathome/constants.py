@@ -86,7 +86,8 @@ class Columns:
     WINDOW_NR: str = 'window_nr'
     TRUE_GAIT_SEGMENT_NR: str = 'true_gait_segment_nr'
     PRED_GAIT_SEGMENT_NR: str = 'pred_gait_segment_nr'
-    SEGMENT_CAT: str = 'segment_cat'
+    TRUE_GAIT_SEGMENT_CAT: str = 'true_gait_segment_cat'
+    PRED_GAIT_SEGMENT_CAT: str = 'true_gait_segment_cat'
     L_ACCELEROMETER: List[str] = field(default_factory=lambda: [
         DataColumns.ACCELEROMETER_X, DataColumns.ACCELEROMETER_Y, DataColumns.ACCELEROMETER_Z
     ])
@@ -241,8 +242,15 @@ class GlobalConstants:
     parameters: Parameters
     plot_parameters: PlotParameters
 
-# Instantiate objects
-paths = Paths.from_env()
+global_constants = GlobalConstants(
+    paths=Paths.from_env(),
+    columns=Columns(),
+    descriptives=Descriptives(),  
+    classifiers=Classifiers(),    
+    participant_ids=ParticipantIDs(), 
+    parameters=Parameters(),  
+    plot_parameters=PlotParameters() 
+)
 
 activity_map = {
     'Lie-to-sit': 'Transitioning',

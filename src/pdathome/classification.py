@@ -14,7 +14,7 @@ from typing import Callable, List
 
 from paradigma.gait_analysis_config import GaitFeatureExtractionConfig, ArmSwingFeatureExtractionConfig
 
-from pdathome.constants import GlobalConstants as gc
+from pdathome.constants import global_constants as gc
 from pdathome.load import load_dataframes_directory
 from pdathome.utils import save_to_pickle
 
@@ -71,8 +71,9 @@ def train_test(
             step=step
         )
 
-        with open(os.path.join(gc.paths.PATH_THRESHOLDS, step, f'{classifier_name}_{subject}.txt'), 'w') as f:
-            f.write(str(classification_threshold))
+        if step == 'gait':
+            with open(os.path.join(gc.paths.PATH_THRESHOLDS, step, f'{classifier_name}_{subject}.txt'), 'w') as f:
+                f.write(str(classification_threshold))
 
 
 def train_test_gait_detection(subject, l_classifiers, n_jobs):
@@ -307,26 +308,6 @@ def store_model_output(df, classifier_name, step, n_jobs=-1):
         
         json.dump(coefficients, f, indent=4)
 
-    # Load individual thresholds and store the mean
-    thresholds = []
-    
-    if step == 'gait':
-        l_ids = gc.participant_ids.L_PD_IDS + gc.participant_ids.L_HC_IDS
-    else:
-        l_ids = gc.participant_ids.L_PD_IDS 
-
-    for subject in l_ids:
-        with open(os.path.join(gc.paths.PATH_THRESHOLDS, step, f'{classifier_name}_{subject}.txt'), 'r') as f:
-            thresholds.append(float(f.read()))
-
-    mean_threshold = np.mean(thresholds)
-    with open(os.path.join(gc.paths.PATH_THRESHOLDS, step, f'{classifier_name}.txt'), 'w') as f:
-        f.write(str(mean_threshold))
-
-    # Delete individual thresholds
-    for subject in l_ids:
-        os.remove(os.path.join(gc.paths.PATH_THRESHOLDS, step, f'{classifier_name}_{subject}.txt')) 
-
     # Save the scaler parameters as JSON
     scaler_params = {
         'mean': scaler.mean_.tolist(),
@@ -342,9 +323,29 @@ def store_model_output(df, classifier_name, step, n_jobs=-1):
     with open(scaler_path, 'w') as f:
         json.dump(scaler_params, f)
 
+    # Load individual thresholds and store the mean
+    if step == 'gait':
+        thresholds = []
+        
+        l_ids = gc.participant_ids.L_PD_IDS + gc.participant_ids.L_HC_IDS
+
+        for subject in l_ids:
+            with open(os.path.join(gc.paths.PATH_THRESHOLDS, step, f'{classifier_name}_{subject}.txt'), 'r') as f:
+                thresholds.append(float(f.read()))
+
+        mean_threshold = np.mean(thresholds)
+        with open(os.path.join(gc.paths.PATH_THRESHOLDS, step, f'{classifier_name}.txt'), 'w') as f:
+            f.write(str(mean_threshold))
+
+        # Delete individual thresholds
+        for subject in l_ids:
+            os.remove(os.path.join(gc.paths.PATH_THRESHOLDS, step, f'{classifier_name}_{subject}.txt')) 
+
     if step == 'arm_activity':       
         # Predict arm activity for the controls
         predict_controls(clf, scaler, classifier_name, l_predictors, l_predictors_scaled, step)
+
+    
 
 
 def predict_controls(clf, scaler, classifier_name, l_predictors, l_predictors_scaled, step):

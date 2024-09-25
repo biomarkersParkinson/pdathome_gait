@@ -15,9 +15,9 @@ from paradigma.feature_extraction import extract_temporal_domain_features, extra
 from paradigma.gait_analysis_config import GaitFeatureExtractionConfig, ArmSwingFeatureExtractionConfig
 from paradigma.imu_preprocessing import butterworth_filter
 from paradigma.preprocessing_config import IMUPreprocessingConfig
-from paradigma.windowing import tabulate_windows, create_segments, create_segment_df, discard_segments
+from paradigma.windowing import tabulate_windows, create_segments, discard_segments
 
-from pdathome.constants import GlobalConstants as gc, Mappings as mp
+from pdathome.constants import global_constants as gc, Mappings as mp
 from pdathome.load import load_stage_start_end, load_sensor_data, load_video_annotations
 from pdathome.utils import save_to_pickle
 
@@ -135,21 +135,21 @@ def preprocess_gait_detection(subject):
 
         # Add segment number based on video-annotated labels --
         # only need to do this once
-        if side == gc.descriptives.MOST_AFFECTED_SIDE:
+        # if side == gc.descriptives.MOST_AFFECTED_SIDE:
             
-            df[gc.columns.TRUE_GAIT_SEGMENT_NR] = create_segments(
-                df=df.loc[df['gait_boolean'] == 1],
-                time_column_name=gc.columns.TIME,
-                gap_threshold_s=1.5
-            )
+        #     df[gc.columns.TRUE_GAIT_SEGMENT_NR] = create_segments(
+        #         df=df.loc[df['gait_boolean'] == 1],
+        #         time_column_name=gc.columns.TIME,
+        #         gap_threshold_s=1.5
+        #     )
 
-            df_segments = create_segment_df(
-                df=df,
-                time_column_name=gc.columns.TIME,
-                segment_nr_colname=gc.columns.TRUE_GAIT_SEGMENT_NR,
-            )
+        #     df_segments = create_segment_df(
+        #         df=df,
+        #         time_column_name=gc.columns.TIME,
+        #         segment_nr_colname=gc.columns.TRUE_GAIT_SEGMENT_NR,
+        #     )
 
-            df_segments.to_pickle(os.path.join(gc.paths.PATH_PREPROCESSED_DATA, 'misc', f'{subject}_segments_true_gait.pkl'))
+        #     df_segments.to_pickle(os.path.join(gc.paths.PATH_PREPROCESSED_DATA, 'misc', f'{subject}_segments_true_gait.pkl'))
 
         config = GaitFeatureExtractionConfig()
 
@@ -299,6 +299,19 @@ def preprocess_filtering_gait(subject):
         # Filter unobserved data
         if subject in gc.participant_ids.L_PD_IDS:
             df = df[df[gc.columns.ARM_LABEL] != 'cant assess']
+
+        # Group consecutive timestamps into segments with new segments starting after a pre-specified gap
+        df[gc.columns.TRUE_GAIT_SEGMENT_NR] = create_segments(
+            df=df.loc[df['gait_boolean']==1],
+            time_column_name=gc.columns.TIME,
+            gap_threshold_s=gc.parameters.SEGMENT_GAP_GAIT
+        )
+
+        df[gc.columns.TRUE_GAIT_SEGMENT_CAT] = categorize_segments(
+            df=df.loc[df['gait_boolean']==1],
+            segment_nr_colname=gc.columns.TRUE_GAIT_SEGMENT_NR,
+            sampling_frequency=gc.parameters.DOWNSAMPLED_FREQUENCY
+        )
         
         # Use only predicted gait for the subsequent steps
         df = df[df[gc.columns.PRED_GAIT] == 1].reset_index(drop=True)
@@ -307,19 +320,14 @@ def preprocess_filtering_gait(subject):
         df[gc.columns.PRED_GAIT_SEGMENT_NR] = create_segments(
             df=df,
             time_column_name=gc.columns.TIME,
-            gap_threshold_s=arm_activity_config.window_length_s
+            gap_threshold_s=gc.parameters.SEGMENT_GAP_GAIT
         )
 
-        # Add segment number based on predicted labels --
-        # only need to do this once
-        if side == gc.descriptives.MOST_AFFECTED_SIDE:
-            df_segments = create_segment_df(
-                df=df,
-                time_column_name=gc.columns.TIME,
-                segment_nr_colname=gc.columns.PRED_GAIT_SEGMENT_NR,
-            )
-
-            df_segments.to_pickle(os.path.join(gc.paths.PATH_PREPROCESSED_DATA, 'misc', f'{subject}_segments_pred_gait.pkl'))
+        df[gc.columns.PRED_GAIT_SEGMENT_CAT] = categorize_segments(
+            df=df,
+            segment_nr_colname=gc.columns.PRED_GAIT_SEGMENT_NR,
+            sampling_frequency=gc.parameters.DOWNSAMPLED_FREQUENCY
+        )
 
         # Remove any segments that do not adhere to predetermined criteria
         df = discard_segments(
@@ -330,8 +338,13 @@ def preprocess_filtering_gait(subject):
         )
 
         # Create windows of fixed length and step size from the time series
+        arm_activity_config.l_data_point_level_cols += [
+            gc.columns.TRUE_GAIT_SEGMENT_NR, gc.columns.TRUE_GAIT_SEGMENT_CAT
+        ]
         if subject in gc.participant_ids.L_PD_IDS:
-            l_single_value_cols = gc.columns.PRE_OR_POST
+            l_single_value_cols = [
+                gc.columns.PRE_OR_POST, gc.columns.PRED_GAIT_SEGMENT_NR, gc.columns.PRED_GAIT_SEGMENT_CAT
+            ]
             arm_activity_config.l_data_point_level_cols.append(gc.columns.ARM_LABEL)
         else:
             l_single_value_cols = None
@@ -436,7 +449,9 @@ def preprocess_filtering_gait(subject):
         df_windowed.fillna(0, inplace=True)
         df_windowed[gc.columns.SIDE] = side
 
-        l_export_cols = [gc.columns.TIME, gc.columns.WINDOW_NR] + list(arm_activity_config.d_channels_values.keys())
+        l_export_cols = [
+            gc.columns.TIME, gc.columns.WINDOW_NR, gc.columns.PRED_GAIT_SEGMENT_NR, gc.columns.PRED_GAIT_SEGMENT_CAT,
+            gc.columns.TRUE_GAIT_SEGMENT_NR, gc.columns.TRUE_GAIT_SEGMENT_CAT] + list(arm_activity_config.d_channels_values.keys())
 
         if subject in gc.participant_ids.L_PD_IDS:
             l_export_cols += [gc.columns.PRE_OR_POST, gc.columns.ARM_LABEL_MAJORITY_VOTING, gc.columns.OTHER_ARM_ACTIVITY_MAJORITY_VOTING]
