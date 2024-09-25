@@ -30,7 +30,7 @@ def train_test(
     pred_colname: str,
     step: str,
     path_features: str,
-    path_predictions: str
+    path_predictions: str,
     n_jobs: int
 ):
     # Initialize configuration
@@ -241,7 +241,7 @@ def windows_to_timestamps(subject, df, path_output, pred_proba_colname, step):
     )
 
 
-def store_model_output(df, step, n_jobs=-1):
+def store_model_output(df, classifier_name, step, n_jobs=-1):
     if step not in ['gait', 'arm_activity']:
         raise ValueError("Step not recognized")
     
@@ -269,62 +269,60 @@ def store_model_output(df, step, n_jobs=-1):
     X = df_scaled[l_predictors]
     y = df_scaled[target_column_name].astype(int)
 
-    for classifier_name in [classifiers.LOGISTIC_REGRESSION, classifiers.RANDOM_FOREST]:
+    # train on all subjects and store model
+    if classifier_name == classifiers.RANDOM_FOREST:
+        clf = RandomForestClassifier(
+            **classifier_hyperparameters[classifiers.RANDOM_FOREST],
+            class_weight=class_weight,
+            n_jobs=n_jobs
+        )
+    elif classifier_name == classifiers.LOGISTIC_REGRESSION:
+        clf = LogisticRegression(
+            **classifier_hyperparameters[classifiers.LOGISTIC_REGRESSION],
+            class_weight=class_weight,
+            n_jobs=n_jobs
+        )
 
-        # train on all subjects and store model
-        if classifier_name == classifiers.RANDOM_FOREST:
-            clf = RandomForestClassifier(
-                **classifier_hyperparameters[classifiers.RANDOM_FOREST],
-                class_weight=class_weight,
-                n_jobs=n_jobs
-            )
-        elif classifier_name == classifiers.LOGISTIC_REGRESSION:
-            clf = LogisticRegression(
-                **classifier_hyperparameters[classifiers.LOGISTIC_REGRESSION],
-                class_weight=class_weight,
-                n_jobs=n_jobs
-            )
+    # Fit the model
+    clf.fit(X, y)
 
-        # Fit the model
-        clf.fit(X, y)
+    # Save the model as a pickle file
+    model_path = os.path.join(paths.PATH_CLASSIFIERS, step, f'{classifier_name}.pkl')
 
-        # Save the model as a pickle file
-        model_path = os.path.join(paths.PATH_CLASSIFIERS, step, f'{classifier_name}.pkl')
+    if not os.path.exists(paths.PATH_CLASSIFIERS):
+        os.makedirs(paths.PATH_CLASSIFIERS)
 
-        if not os.path.exists(paths.PATH_CLASSIFIERS):
-            os.makedirs(paths.PATH_CLASSIFIERS)
+    with open(model_path, 'wb') as f:
+        pickle.dump(clf, f)
 
-        with open(model_path, 'wb') as f:
-            pickle.dump(clf, f)
-
-        # Save coefficients as json
-        with open(os.path.join(paths.PATH_COEFFICIENTS, step, f'{classifier_name}.json'), 'w') as f:
-            if type(clf).__name__.lower() == 'logisticregression': 
-                coefficients = {k: v for k, v in zip(l_predictors, clf.coef_[0])}
-            elif type(clf).__name__.lower() == 'randomforestclassifier':
-                coefficients = {k: v for k, v in zip(l_predictors, clf.feature_importances_)}
-            
-            json.dump(coefficients, f, indent=4)
-
-        # Load individual thresholds and store the mean
-        thresholds = []
+    # Save coefficients as json
+    with open(os.path.join(paths.PATH_COEFFICIENTS, step, f'{classifier_name}.json'), 'w') as f:
+        if type(clf).__name__.lower() == 'logisticregression': 
+            coefficients = {k: v for k, v in zip(l_predictors, clf.coef_[0])}
+        elif type(clf).__name__.lower() == 'randomforestclassifier':
+            coefficients = {k: v for k, v in zip(l_predictors, clf.feature_importances_)}
         
-        if step == 'gait':
-            l_ids = participant_ids.L_PD_IDS + participant_ids.L_HC_IDS
-        else:
-            l_ids = participant_ids.L_PD_IDS 
+        json.dump(coefficients, f, indent=4)
 
-        for subject in l_ids:
-            with open(os.path.join(paths.PATH_THRESHOLDS, step, f'{classifier_name}_{subject}.txt'), 'r') as f:
-                thresholds.append(float(f.read()))
+    # Load individual thresholds and store the mean
+    thresholds = []
+    
+    if step == 'gait':
+        l_ids = participant_ids.L_PD_IDS + participant_ids.L_HC_IDS
+    else:
+        l_ids = participant_ids.L_PD_IDS 
 
-        mean_threshold = np.mean(thresholds)
-        with open(os.path.join(paths.PATH_THRESHOLDS, step, f'{classifier_name}.txt'), 'w') as f:
-            f.write(str(mean_threshold))
+    for subject in l_ids:
+        with open(os.path.join(paths.PATH_THRESHOLDS, step, f'{classifier_name}_{subject}.txt'), 'r') as f:
+            thresholds.append(float(f.read()))
 
-        # Delete individual thresholds
-        for subject in l_ids:
-            os.remove(os.path.join(paths.PATH_THRESHOLDS, step, f'{classifier_name}_{subject}.txt')) 
+    mean_threshold = np.mean(thresholds)
+    with open(os.path.join(paths.PATH_THRESHOLDS, step, f'{classifier_name}.txt'), 'w') as f:
+        f.write(str(mean_threshold))
+
+    # Delete individual thresholds
+    for subject in l_ids:
+        os.remove(os.path.join(paths.PATH_THRESHOLDS, step, f'{classifier_name}_{subject}.txt')) 
 
     # Save the scaler parameters as JSON
     scaler_params = {
@@ -366,28 +364,30 @@ def predict_controls(clf, scaler, classifier_name, l_predictors, l_predictors_sc
         )
 
 
-def store_gait_detection(classifier, n_jobs=-1):
+def store_gait_detection(l_classifiers, n_jobs=-1):
     df = load_dataframes_directory(
         directory_path=paths.PATH_GAIT_FEATURES,
         l_ids=participant_ids.L_PD_IDS + participant_ids.L_HC_IDS
     )
 
-    store_model_output(
-        df=df,
-        classifier=classifier,
-        step='gait',
-        n_jobs=n_jobs
-    )
+    for classifier in l_classifiers:
+        store_model_output(
+            df=df,
+            classifier=classifier,
+            step='gait',
+            n_jobs=n_jobs
+        )
 
 
-def store_filtering_gait(classifier, n_jobs=-1):
+def store_filtering_gait(l_classifiers, n_jobs=-1):
     df = load_dataframes_directory(
         directory_path=paths.PATH_ARM_ACTIVITY_FEATURES,
         l_ids=participant_ids.L_PD_IDS,
     )
 
-    store_model_output(
-        df=df,
-        step='arm_activity',
-        n_jobs=n_jobs
-    )
+    for classifier in l_classifiers:
+        store_model_output(
+            df=df,
+            step='arm_activity',
+            n_jobs=n_jobs
+        )
