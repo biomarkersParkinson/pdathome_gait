@@ -4,7 +4,7 @@ import sys
 from functools import partial
 from multiprocessing import Pool
 
-from pdathome.constants import GlobalConstants as gc
+from pdathome.constants import global_constants as gc
 from pdathome.classification import train_test_gait_detection, train_test_filtering_gait, store_gait_detection, store_filtering_gait
 from pdathome.preprocessing import prepare_data, preprocess_gait_detection, preprocess_filtering_gait
 
