@@ -15,7 +15,7 @@ from paradigma.feature_extraction import extract_temporal_domain_features, extra
 from paradigma.gait_analysis_config import GaitFeatureExtractionConfig, ArmSwingFeatureExtractionConfig
 from paradigma.imu_preprocessing import butterworth_filter
 from paradigma.preprocessing_config import IMUPreprocessingConfig
-from paradigma.windowing import tabulate_windows, create_segments, discard_segments
+from paradigma.windowing import tabulate_windows, create_segments, discard_segments, categorize_segments
 
 from pdathome.constants import global_constants as gc, Mappings as mp
 from pdathome.load import load_stage_start_end, load_sensor_data, load_video_annotations
