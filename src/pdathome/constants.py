@@ -268,6 +268,26 @@ classifier_hyperparameters = {
     }
 }
 
+activity_map = {
+    'Lie-to-sit': 'Transitioning',
+    'Lie-to-stand': 'Transitioning',
+    'Sit-to-lie': 'Transitioning',
+    'Sit-to-stand (low chair/couch)': 'Transitioning',
+    'Sit-to-stand (normal chair)': 'Transitioning',
+    'Stand-to-lie': 'Transitioning',
+    'Stand-to-sit (low chair/couch)': 'Transitioning',
+    'Stand-to-sit (normal chair)': 'Transitioning',
+    'Walking downstairs': 'Walking the stairs',
+    'Walking upstairs': 'Walking the stairs',
+}
+
+segment_map = {
+    1: 'short',
+    2: 'moderately_long',
+    3: 'long',
+    4: 'very_long'
+}
+
 
 tiers_labels_map = {
     'General protocol structure' : {
