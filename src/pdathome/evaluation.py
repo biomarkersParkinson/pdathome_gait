@@ -91,8 +91,6 @@ def generate_clinical_scores(l_ids):
 
 def generate_results_step(step, l_pd, l_controls, segment_gap_s):
 
-    d_clinical_scores = generate_clinical_scores(l_pd)
-
     d_output = {
         descriptives.PARKINSONS_DISEASE: {},
         descriptives.CONTROLS: {}
@@ -100,8 +98,6 @@ def generate_results_step(step, l_pd, l_controls, segment_gap_s):
 
     for subject in l_pd + l_controls:
         d_performance = {}
-        if subject in l_pd:
-            d_performance['clinical'] = d_clinical_scores[subject]
         
         for model in [classifiers.LOGISTIC_REGRESSION, classifiers.RANDOM_FOREST]:
             d_performance[model] = {}
@@ -267,3 +263,22 @@ def generate_results_step(step, l_pd, l_controls, segment_gap_s):
         print(f"Time {datetime.datetime.now()} - {subject} - Finished.")
             
     return d_output
+
+
+def generate_results():
+
+    d_output = {}
+
+    d_output['clinical'] = generate_clinical_scores(participant_ids.L_PD_IDS)
+
+    for step in ['gait', 'arm_activity']:
+        d_output[step] = generate_results_step(
+            step=step, 
+            l_pd=participant_ids.L_PD_IDS,
+            l_controls=participant_ids.L_HC_IDS,
+            segment_gap_s=1.5
+        )
+
+    return d_output
+
+
