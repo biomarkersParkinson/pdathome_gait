@@ -47,14 +47,21 @@ if __name__ == '__main__':
     l_ids = sys.argv[3:]      # List of ids to process
 
     # Choose which classifiers to run
-    gd_models = [classifiers.GAIT_DETECTION_CLASSIFIER_SELECTED]
-    fg_models = [classifiers.ARM_ACTIVITY_CLASSIFIER_SELECTED]
+    gd_classifiers = [classifiers.GAIT_DETECTION_CLASSIFIER_SELECTED]
+    fg_classifiers = [classifiers.ARM_ACTIVITY_CLASSIFIER_SELECTED]
+
+    # No need for nested parallelization
+    n_jobs = 1
 
     for step, func in steps_map.items():
-        if step in ['3', '4']:
-            steps_map[step] = partial(func, l_classifiers=gd_models)
-        elif step in ['6', '7']:
-            steps_map[step] = partial(func, l_classifiers=fg_models)
+        if step == '3':
+            steps_map[step] = partial(func, l_classifiers=gd_classifiers, n_jobs=n_jobs)
+        elif step == '4':
+            steps_map[step] = partial(func, l_classifiers=gd_classifiers)
+        elif step == '6':
+            steps_map[step] = partial(func, l_classifiers=fg_classifiers, n_jobs=n_jobs)
+        elif step == '7': 
+            steps_map[step] = partial(func, l_classifiers=fg_classifiers)
 
     # Run the specified steps
     for step in steps:

@@ -203,7 +203,7 @@ def preprocess_filtering_gait(subject):
         print(f"Time {datetime.datetime.now()} - {subject} {side} - Processing ...")
         df_pred = pd.read_pickle(os.path.join(paths.PATH_GAIT_PREDICTIONS, classifiers.GAIT_DETECTION_CLASSIFIER_SELECTED, f'{subject}.pkl'))
 
-        with open(os.path.join(paths.PATH_THRESHOLDS, 'gait', f'threshold_{classifiers.GAIT_DETECTION_CLASSIFIER_SELECTED}.txt'), 'r') as f:
+        with open(os.path.join(paths.PATH_THRESHOLDS, 'gait', f'{classifiers.GAIT_DETECTION_CLASSIFIER_SELECTED}.txt'), 'r') as f:
             threshold = float(f.read())
 
         # Configure columns based on cohort
