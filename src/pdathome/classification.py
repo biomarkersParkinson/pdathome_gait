@@ -92,19 +92,20 @@ def train_test_gait_detection(subject, l_classifiers, n_jobs):
 
 
 def train_test_filtering_gait(subject, l_classifiers, n_jobs):
-    train_test(
-        subject=subject,
-        l_ids=gc.participant_ids.L_PD_IDS,
-        config_class=ArmSwingFeatureExtractionConfig,
-        l_classifiers=l_classifiers,
-        target_column_name=gc.columns.OTHER_ARM_ACTIVITY_MAJORITY_VOTING,
-        pred_proba_colname=gc.columns.PRED_OTHER_ARM_ACTIVITY_PROBA,
-        pred_colname=gc.columns.PRED_OTHER_ARM_ACTIVITY,
-        step='arm_activity',
-        path_features=gc.paths.PATH_ARM_ACTIVITY_FEATURES,
-        path_predictions=gc.paths.PATH_ARM_ACTIVITY_PREDICTIONS,
-        n_jobs=n_jobs
-    )
+    if subject in gc.participant_ids.L_PD_IDS:
+        train_test(
+            subject=subject,
+            l_ids=gc.participant_ids.L_PD_IDS,
+            config_class=ArmSwingFeatureExtractionConfig,
+            l_classifiers=l_classifiers,
+            target_column_name=gc.columns.OTHER_ARM_ACTIVITY_MAJORITY_VOTING,
+            pred_proba_colname=gc.columns.PRED_OTHER_ARM_ACTIVITY_PROBA,
+            pred_colname=gc.columns.PRED_OTHER_ARM_ACTIVITY,
+            step='arm_activity',
+            path_features=gc.paths.PATH_ARM_ACTIVITY_FEATURES,
+            path_predictions=gc.paths.PATH_ARM_ACTIVITY_PREDICTIONS,
+            n_jobs=n_jobs
+        )
 
 
 def cv_train_test_model(subject, df, classifier_name, l_predictors, l_predictors_scale, target_column_name, 
