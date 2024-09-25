@@ -1,6 +1,6 @@
 import os
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from dotenv import load_dotenv
 from matplotlib import colors, colormaps
 from typing import Any, Dict, List
@@ -87,15 +87,15 @@ class Columns:
     TRUE_GAIT_SEGMENT_NR: str = 'true_gait_segment_nr'
     PRED_GAIT_SEGMENT_NR: str = 'pred_gait_segment_nr'
     SEGMENT_CAT: str = 'segment_cat'
-    L_ACCELEROMETER: List[str] = [
+    L_ACCELEROMETER: List[str] = field(default_factory=lambda: [
         DataColumns.ACCELEROMETER_X, DataColumns.ACCELEROMETER_Y, DataColumns.ACCELEROMETER_Z
-    ]
-    L_GYROSCOPE: List[str] = [
+    ])
+    L_GYROSCOPE: List[str] = field(default_factory=lambda: [
         DataColumns.GYROSCOPE_X, DataColumns.GYROSCOPE_Y, DataColumns.GYROSCOPE_Z
-    ]
-    L_ARM_ACTIVITY_ANNOTATIONS: List[str] = [
+    ])
+    L_ARM_ACTIVITY_ANNOTATIONS: List[str] = field(default_factory=lambda: [
         'tier', 'nan', 'start_s', 'end_s', 'duration_s', 'code'
-    ]
+    ])
 
 @dataclass(frozen=True)
 class Descriptives:
@@ -115,15 +115,15 @@ class Classifiers:
     GAIT_DETECTION_CLASSIFIER_SELECTED: str = 'rf'
     ARM_ACTIVITY_CLASSIFIER_SELECTED: str = 'logreg'
 
-    LOGISTIC_REGRESSION_HYPERPARAMETERS: Dict[str, Any] = {
+    LOGISTIC_REGRESSION_HYPERPARAMETERS: Dict[str, Any] = field(default_factory=lambda: {
         'penalty': 'l1',
         'solver': 'saga',
         'tol': 1e-4,
         'C': 1e-2,
         'random_state': 22,
-    }
+    })
 
-    RANDOM_FOREST_HYPERPARAMETERS: Dict[str, Any] = {
+    RANDOM_FOREST_HYPERPARAMETERS: Dict[str, Any] = field(default_factory=lambda: {
         'n_estimators': 100,
         'max_features': 'sqrt',
         'min_samples_split': 25,
@@ -132,87 +132,87 @@ class Classifiers:
         'bootstrap': True,
         'oob_score': True,
         'random_state': 22,
-    }
+    })
 
 @dataclass(frozen=True)
 class ParticipantIDs:
     # Parkinson's disease (PD) IDs
-    L_PD_IDS: List[str] = ['hbv' + x for x in [
+    L_PD_IDS: List[str] = field(default_factory=lambda: ['hbv' + x for x in [
         '002', '012', '014', '015', '016', '017', '022', '024',
         '039', '043', '047', '054', '065', '077', '079', '090',
         '013', '018', '023', '038', '058', '063'
-    ]]
+    ]])
     
     # Control IDs
-    L_HC_IDS: List[str] = ['hbv' + x for x in [
+    L_HC_IDS: List[str] = field(default_factory=lambda: ['hbv' + x for x in [
         '053', '072', '073', '082', '083', '084', '087', '091',
         '093', '097', '099', '100', '106', '108', '109', '110',
         '112', '115', '117', '122', '128', '136', '081'
-    ]]
+    ]])
 
     # PD IDs pre-medication
-    L_PRE_IDS: List[str] = ['hbv' + x for x in [
+    L_PRE_IDS: List[str] = field(default_factory=lambda: ['hbv' + x for x in [
         'hbv115', 'hbv117', 'hbv122', 'hbv136'
-    ]]
+    ]])
 
     # PD IDs with tremor
-    L_TREMOR_IDS: List[str] = ['hbv' + x for x in [
+    L_TREMOR_IDS: List[str] = field(default_factory=lambda: ['hbv' + x for x in [
         '012', '013', '017', '018', '022', '023', '038', '090'
-    ]]
+    ]])
 
     # PD IDs with multiple raw files
-    L_W_PARTS: List[str] = ['hbv' + x for x in [
+    L_W_PARTS: List[str] = field(default_factory=lambda: ['hbv' + x for x in [
         'hbv013', 'hbv018', 'hbv023', 'hbv038', 'hbv058',
         'hbv063', 'hbv080'
-    ]]
+    ]])
 
     # PD IDs with sensor on left wrist in normal position
-    L_L_NORMAL: List[str] = ['hbv' + x for x in [
+    L_L_NORMAL: List[str] = field(default_factory=lambda: ['hbv' + x for x in [
         '002', '012', '013', '014', '015', '017', '018', '022',
         '023', '024', '038', '039', '043', '047', '054', '063',
         '077', '079', '090', '053', '072', '073', '081', '082',
         '083', '084', '087', '091', '093', '097', '099', '100',
         '106', '108', '109', '110', '112', '115', '117', '122',
         '128', '136'
-    ]]
+    ]])
 
     # PD IDs with sensor on right wrist in normal position
-    L_R_NORMAL: List[str] = ['hbv' + x for x in [
+    L_R_NORMAL: List[str] = field(default_factory=lambda: ['hbv' + x for x in [
         '002', '012', '013', '014', '015', '017', '018', '022',
         '023', '024', '038', '039', '043', '047', '054', '063',
         '077', '079', '090', '053', '072', '073', '081', '082',
         '083', '084', '087', '091', '093', '097', '099', '100',
         '106', '108', '109', '110', '112', '115', '117', '122',
         '128', '136', '058'
-    ]]
+    ]])
 
     # PD IDs with most affected side left
-    L_PD_MOST_AFFECTED_LEFT: List[str] = ['hbv' + x for x in [
+    L_PD_MOST_AFFECTED_LEFT: List[str] = field(default_factory=lambda: ['hbv' + x for x in [
         '013', '014', '015', '016', '017', '022', '024', '039',
         '043', '047', '077'
-    ]]
+    ]])
 
     # PD IDs with most affected side right
-    L_PD_MOST_AFFECTED_RIGHT: List[str] = ['hbv' + x for x in [
+    L_PD_MOST_AFFECTED_RIGHT: List[str] = field(default_factory=lambda: ['hbv' + x for x in [
         '002', '012', '018', '023', '038', '054', '058', '063',
         '065', '074', '079', '090'
-    ]]
+    ]])
 
     # PD IDs with dominant side left
-    L_PD_DOMINANT_LEFT: List[str] = ['hbv' + x for x in [
+    L_PD_DOMINANT_LEFT: List[str] = field(default_factory=lambda: ['hbv' + x for x in [
         '002', '016', '024', '043', '065'
-    ]]
+    ]])
 
     # PD IDs with dominant side right
-    L_PD_DOMINANT_RIGHT: List[str] = ['hbv' + x for x in [
+    L_PD_DOMINANT_RIGHT: List[str] = field(default_factory=lambda: ['hbv' + x for x in [
         '012', '014', '015', '017', '022', '039', '047', '054',
         '077', '090', '018', '023', '038', '058', '063'
-    ]]
+    ]])
 
     # PD IDs with dominant side both
-    L_PD_DOMINANT_BOTH: List[str] = ['hbv' + x for x in [
+    L_PD_DOMINANT_BOTH: List[str] = field(default_factory=lambda: ['hbv' + x for x in [
         '013', '079'
-    ]]
+    ]])
 
 @dataclass(frozen=True)
 class Parameters:
