@@ -27,7 +27,7 @@ import numpy as np
 
 
 def prepare_data(subject):
-    print(f"Time {datetime.datetime.now()} - {subject} - Preparing data ...")
+    print(f"Time {datetime.datetime.now()} - {subject} - Starting preparing data ...")
     with open(os.path.join(gc.gc.paths.PATH_CLINICAL_DATA, 'distribution_participants.json'), 'r') as f:
         d_participant_distribution = json.load(f)
 
@@ -100,11 +100,12 @@ def prepare_data(subject):
             path=gc.paths.PATH_PREPARED_DATA,
             filename=f'{subject}_{side}.pkl'
         )
+    print(f"Time {datetime.datetime.now()} - {subject} - Finished preparing data.")
 
 
 def preprocess_gait_detection(subject):
+    print(f"Time {datetime.datetime.now()} - {subject} - Starting preprocessing gait detection ...")
     for side in [gc.descriptives.MOST_AFFECTED_SIDE, gc.descriptives.LEAST_AFFECTED_SIDE]:
-        print(f"Time {datetime.datetime.now()} - {subject} {side} - Preprocessing gait ...")
         df = pd.read_pickle(os.path.join(gc.paths.PATH_PREPARED_DATA, f'{subject}_{side}.pkl'))
 
         config = IMUPreprocessingConfig()
@@ -132,29 +133,17 @@ def preprocess_gait_detection(subject):
 
         # Drop original accelerometer gc.columns and append filtered results
         df = df.drop(columns=accel_cols).rename(columns={f'filt_{col}': col for col in accel_cols})
-
-        # Add segment number based on video-annotated labels --
-        # only need to do this once
-        # if side == gc.descriptives.MOST_AFFECTED_SIDE:
-            
-        #     df[gc.columns.TRUE_GAIT_SEGMENT_NR] = create_segments(
-        #         df=df.loc[df['gait_boolean'] == 1],
-        #         time_column_name=gc.columns.TIME,
-        #         gap_threshold_s=1.5
-        #     )
-
-        #     df_segments = create_segment_df(
-        #         df=df,
-        #         time_column_name=gc.columns.TIME,
-        #         segment_nr_colname=gc.columns.TRUE_GAIT_SEGMENT_NR,
-        #     )
-
-        #     df_segments.to_pickle(os.path.join(gc.paths.PATH_PREPROCESSED_DATA, 'misc', f'{subject}_segments_true_gait.pkl'))
+        
+        df[gc.columns.TRUE_GAIT_SEGMENT_NR] = create_segments(
+            df=df.loc[df['gait_boolean'] == 1],
+            time_column_name=gc.columns.TIME,
+            gap_threshold_s=1.5
+        )
 
         config = GaitFeatureExtractionConfig()
 
-        config.l_data_point_level_cols += [gc.columns.TIME,gc.columns.FREE_LIVING_LABEL]
-        l_ts_cols = [gc.columns.TIME, gc.columns.WINDOW_NR, gc.columns.FREE_LIVING_LABEL]
+        config.l_data_point_level_cols += [gc.columns.TIME, gc.columns.TRUE_GAIT_SEGMENT_NR, gc.columns.FREE_LIVING_LABEL]
+        l_ts_cols = [gc.columns.TIME, gc.columns.TRUE_GAIT_SEGMENT_NR, gc.columns.WINDOW_NR, gc.columns.FREE_LIVING_LABEL]
         l_export_cols = [gc.columns.TIME, gc.columns.WINDOW_NR, gc.columns.ACTIVITY_LABEL_MAJORITY_VOTING, gc.columns.GAIT_MAJORITY_VOTING] + list(config.d_channels_values.keys())
         l_single_value_cols = None
         if subject in gc.participant_ids.L_PD_IDS:
@@ -212,11 +201,12 @@ def preprocess_gait_detection(subject):
             path=gc.paths.PATH_GAIT_FEATURES,
             filename=f'{subject}_{side}.pkl'
         )
+    print(f"Time {datetime.datetime.now()} - {subject} - Finished preprocessing gait detection.")
 
 
 def preprocess_filtering_gait(subject):
+    print(f"Time {datetime.datetime.now()} - {subject} - Starting preprocessing filtering gait ...")
     for side in [gc.descriptives.MOST_AFFECTED_SIDE, gc.descriptives.LEAST_AFFECTED_SIDE]:
-        print(f"Time {datetime.datetime.now()} - {subject} {side} - Processing ...")
         df_pred = pd.read_pickle(os.path.join(gc.paths.PATH_GAIT_PREDICTIONS, gc.classifiers.GAIT_DETECTION_CLASSIFIER_SELECTED, f'{subject}.pkl'))
 
         with open(os.path.join(gc.paths.PATH_THRESHOLDS, 'gait', f'{gc.classifiers.GAIT_DETECTION_CLASSIFIER_SELECTED}.txt'), 'r') as f:
@@ -461,6 +451,8 @@ def preprocess_filtering_gait(subject):
             path=gc.paths.PATH_ARM_ACTIVITY_FEATURES,
             filename=f'{subject}_{side}.pkl'
         )
+
+    print(f"Time {datetime.datetime.now()} - {subject} - Finished preprocessing filtering gait.")
 
 
 def determine_wrist_pos(subject, watch_side, d_participant_distribution):
