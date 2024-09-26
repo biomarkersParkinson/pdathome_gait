@@ -8,6 +8,7 @@ from typing import Union, List
 
 from collections import Counter
 from scipy.interpolate import CubicSpline
+from scipy import signal
 
 from paradigma.feature_extraction import extract_temporal_domain_features, extract_spectral_domain_features, \
     pca_transform_gyroscope, compute_angle, remove_moving_average_angle, signal_to_ffts, get_dominant_frequency, \
@@ -17,7 +18,7 @@ from paradigma.imu_preprocessing import butterworth_filter
 from paradigma.preprocessing_config import IMUPreprocessingConfig
 from paradigma.windowing import tabulate_windows, create_segments, create_segment_df, discard_segments
 
-from pdathome.constants import GlobalConstants as gc, Mappings as mp
+from pdathome.constants import global_constants as gc, mappings as mp
 from pdathome.load import load_stage_start_end, load_sensor_data, load_video_annotations
 from pdathome.utils import save_to_pickle
 
@@ -291,7 +292,7 @@ def preprocess_filtering_gait(subject):
 
         # Remove the moving average from the angle to account for possible drift caused by the integration
         # of noise in the angular velocity
-        df[gc.columns.ANGLE_SMOOTH] = remove_moving_average_angle(
+        df[gc.columns.ANGLE] = remove_moving_average_angle(
             angle_col=df[gc.columns.ANGLE],
             sampling_frequency=arm_activity_config.sampling_frequency
         )
@@ -310,17 +311,6 @@ def preprocess_filtering_gait(subject):
             gap_threshold_s=arm_activity_config.window_length_s
         )
 
-        # Add segment number based on predicted labels --
-        # only need to do this once
-        if side == gc.descriptives.MOST_AFFECTED_SIDE:
-            df_segments = create_segment_df(
-                df=df,
-                time_column_name=gc.columns.TIME,
-                segment_nr_colname=gc.columns.PRED_GAIT_SEGMENT_NR,
-            )
-
-            df_segments.to_pickle(os.path.join(gc.paths.PATH_PREPROCESSED_DATA, 'misc', f'{subject}_segments_pred_gait.pkl'))
-
         # Remove any segments that do not adhere to predetermined criteria
         df = discard_segments(
             df=df,
@@ -330,8 +320,9 @@ def preprocess_filtering_gait(subject):
         )
 
         # Create windows of fixed length and step size from the time series
+        arm_activity_config.l_data_point_level_cols.append(gc.columns.PRED_GAIT_SEGMENT_NR)
         if subject in gc.participant_ids.L_PD_IDS:
-            l_single_value_cols = gc.columns.PRE_OR_POST
+            l_single_value_cols = [gc.columns.PRE_OR_POST]
             arm_activity_config.l_data_point_level_cols.append(gc.columns.ARM_LABEL)
         else:
             l_single_value_cols = None
@@ -364,7 +355,7 @@ def preprocess_filtering_gait(subject):
 
         # Transform the angle from the temporal domain to the spectral domain using the fast fourier transform
         df_windowed[f'{gc.columns.ANGLE}_freqs'], df_windowed[f'{gc.columns.ANGLE}_fft'] = signal_to_ffts(
-            sensor_col=df_windowed[gc.columns.ANGLE_SMOOTH],
+            sensor_col=df_windowed[gc.columns.ANGLE],
             window_type=arm_activity_config.window_type,
             sampling_frequency=arm_activity_config.sampling_frequency
         )
@@ -384,7 +375,7 @@ def preprocess_filtering_gait(subject):
         df_windowed = df_windowed.drop(columns=[f'{gc.columns.ANGLE}_fft', f'{gc.columns.ANGLE}_freqs'])
 
         # Compute the percentage of power in the frequency band of interest (i.e., the frequency band of the arm swing)
-        df_windowed[f'{gc.columns.ANGLE}_perc_power'] = df_windowed[gc.columns.ANGLE_SMOOTH].apply(
+        df_windowed[f'{gc.columns.ANGLE}_perc_power'] = df_windowed[gc.columns.ANGLE].apply(
             lambda x: compute_perc_power(
                 sensor_col=x,
                 fmin_band=arm_activity_config.power_band_low_frequency,
@@ -397,12 +388,13 @@ def preprocess_filtering_gait(subject):
         )
 
         # Determine the extrema (minima and maxima) of the angle signal
-        extract_angle_extremes(
-            df=df_windowed,
-            angle_colname=gc.columns.ANGLE_SMOOTH,
-            dominant_frequency_colname=f'{gc.columns.ANGLE}_dominant_frequency',
-            sampling_frequency=arm_activity_config.sampling_frequency
-        )
+        df_windowed = extract_angle_extremes(
+                df=df_windowed,
+                angle_colname=gc.columns.ANGLE,
+                dominant_frequency_colname=f'{gc.columns.ANGLE}_dominant_frequency',
+                sampling_frequency=arm_activity_config.sampling_frequency
+            )
+                
 
         # Calculate the change in angle between consecutive extrema (minima and maxima) of the angle signal inside the window
         df_windowed[f'{gc.columns.ANGLE}_amplitudes'] = extract_range_of_motion(angle_extrema_values_col=df_windowed[f'{gc.columns.ANGLE}_extrema_values'])
