@@ -14,7 +14,7 @@ from typing import Callable, List
 
 from paradigma.gait_analysis_config import GaitFeatureExtractionConfig, ArmSwingFeatureExtractionConfig
 
-from pdathome.constants import GlobalConstants as gc
+from pdathome.constants import global_constants as gc
 from pdathome.load import load_dataframes_directory
 from pdathome.utils import save_to_pickle
 
@@ -73,7 +73,7 @@ def train_test(
             f.write(str(classification_threshold))
 
 
-def train_test_gait_detection(subject, l_classifiers, n_jobs):
+def train_test_gait_detection(subject, l_classifiers, n_jobs=-1):
     print(f"Gait detection - Train-testing with LOSO - {subject} ...")
     train_test(
         subject=subject,
@@ -90,7 +90,7 @@ def train_test_gait_detection(subject, l_classifiers, n_jobs):
     )
 
 
-def train_test_filtering_gait(subject, l_classifiers, n_jobs):
+def train_test_filtering_gait(subject, l_classifiers, n_jobs=-1):
     print(f"Filtering gait - Train-testing with LOSO - {subject} ...")
     train_test(
         subject=subject,
