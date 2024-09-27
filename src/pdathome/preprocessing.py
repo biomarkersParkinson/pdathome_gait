@@ -134,24 +134,6 @@ def preprocess_gait_detection(subject):
         # Drop original accelerometer gc.columns and append filtered results
         df = df.drop(columns=accel_cols).rename(columns={f'filt_{col}': col for col in accel_cols})
 
-        # Add segment number based on video-annotated labels --
-        # only need to do this once
-        if side == gc.descriptives.MOST_AFFECTED_SIDE:
-            
-            df[gc.columns.TRUE_GAIT_SEGMENT_NR] = create_segments(
-                df=df.loc[df['gait_boolean'] == 1],
-                time_column_name=gc.columns.TIME,
-                gap_threshold_s=1.5
-            )
-
-            df_segments = create_segment_df(
-                df=df,
-                time_column_name=gc.columns.TIME,
-                segment_nr_colname=gc.columns.TRUE_GAIT_SEGMENT_NR,
-            )
-
-            df_segments.to_pickle(os.path.join(gc.paths.PATH_PREPROCESSED_DATA, 'misc', f'{subject}_segments_true_gait.pkl'))
-
         config = GaitFeatureExtractionConfig()
 
         config.l_data_point_level_cols += [gc.columns.TIME,gc.columns.FREE_LIVING_LABEL]
@@ -225,9 +207,9 @@ def preprocess_filtering_gait(subject):
 
         # Configure gc.columns based on cohort
         if subject in gc.participant_ids.L_PD_IDS:
-            l_cols_to_export = [gc.columns.TIME, gc.columns.PRED_GAIT_SEGMENT_NR, gc.columns.WINDOW_NR, gc.columns.ARM_LABEL, gc.columns.PRE_OR_POST]
+            l_cols_to_export = [gc.columns.TIME, gc.columns.TRUE_GAIT_SEGMENT_NR, gc.columns.PRED_GAIT_SEGMENT_NR, gc.columns.WINDOW_NR, gc.columns.ARM_LABEL, gc.columns.PRE_OR_POST]
         else:
-            l_cols_to_export = [gc.columns.TIME, gc.columns.PRED_GAIT_SEGMENT_NR, gc.columns.WINDOW_NR]
+            l_cols_to_export = [gc.columns.TIME, gc.columns.TRUE_GAIT_SEGMENT_NR, gc.columns.PRED_GAIT_SEGMENT_NR, gc.columns.WINDOW_NR]
 
         # Load sensor data
         df_sensors = pd.read_pickle(os.path.join(gc.paths.PATH_PREPARED_DATA, f'{subject}_{side}.pkl'))
@@ -300,6 +282,16 @@ def preprocess_filtering_gait(subject):
         # Filter unobserved data
         if subject in gc.participant_ids.L_PD_IDS:
             df = df[df[gc.columns.ARM_LABEL] != 'cant assess']
+
+        # Create the segments for the subset of 'Walking' data
+        walking_segments = create_segments(
+            df=df.loc[df[gc.columns.FREE_LIVING_LABEL] == 'Walking'],
+            time_column_name=gc.columns.TIME,
+            gap_threshold_s=arm_activity_config.window_length_s
+        )
+
+        # Assign the result back to the TRUE_GAIT_SEGMENT_NR column for the relevant rows
+        df.loc[df[gc.columns.FREE_LIVING_LABEL] == 'Walking', gc.columns.TRUE_GAIT_SEGMENT_NR] = walking_segments
         
         # Use only predicted gait for the subsequent steps
         df = df[df[gc.columns.PRED_GAIT] == 1].reset_index(drop=True)
@@ -320,12 +312,11 @@ def preprocess_filtering_gait(subject):
         )
 
         # Create windows of fixed length and step size from the time series
-        arm_activity_config.l_data_point_level_cols.append(gc.columns.PRED_GAIT_SEGMENT_NR)
+        arm_activity_config.l_data_point_level_cols.append(gc.columns.TRUE_GAIT_SEGMENT_NR)
+        l_single_value_cols = [gc.columns.PRED_GAIT_SEGMENT_NR]
         if subject in gc.participant_ids.L_PD_IDS:
-            l_single_value_cols = [gc.columns.PRE_OR_POST]
+            l_single_value_cols.append(gc.columns.PRE_OR_POST)
             arm_activity_config.l_data_point_level_cols.append(gc.columns.ARM_LABEL)
-        else:
-            l_single_value_cols = None
 
         l_dfs = [
             tabulate_windows(
