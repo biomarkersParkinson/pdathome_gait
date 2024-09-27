@@ -549,3 +549,13 @@ class Mappings:
     arm_labels_rename: dict
     updrs_3_map: dict
     d_updrs_scoring_map: dict
+
+mappings = Mappings(
+    activity_map = activity_map,
+    segment_map = segment_map,
+    tiers_labels_map = tiers_labels_map,
+    tiers_rename = tiers_rename,
+    arm_labels_rename = arm_labels_rename,
+    updrs_3_map = updrs_3_map,
+    d_updrs_scoring_map = d_updrs_scoring_map
+)

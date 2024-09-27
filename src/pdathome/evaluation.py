@@ -1,4 +1,5 @@
 import datetime
+import json
 import matplotlib.pyplot as plt
 import numpy as np
 import os
@@ -333,7 +334,7 @@ def compute_aggregations(df, l_measures):
     return d_quant
 
 
-def compute_effect_size(df, subject): 
+def compute_effect_size(df, parameter, stat): 
     df['dataset'] = 'Predicted gait'
 
     df[gc.columns.PRED_GAIT_SEGMENT_CAT] = categorize_segments(
@@ -353,64 +354,60 @@ def compute_effect_size(df, subject):
     df_mas = pd.concat([df_mas, df_ann_mas], axis=0).reset_index(drop=True)
 
     # effect size: verschil (point estimate) gedeeld door de std van het verschil (sd van point estimate van bootstrapping)
-    measure = 'range_of_motion'
-
     d_effect_size = {}
     d_diffs = {}
 
-    for stat in ['median', '95']:
-        d_effect_size[stat] = {}
-        for dataset in df_mas['dataset'].unique():
-            d_effect_size[stat][dataset] = {}
+    for dataset in df_mas['dataset'].unique():
+        d_effect_size[dataset] = {}
 
-            for segment_category in ['short', 'moderately_long', 'long', 'very_long', 'overall']:
-                df_pre = df_mas.loc[(df_mas['dataset']==dataset) & (df_mas[gc.columns.PRE_OR_POST]==gc.descriptives.PRE_MED)]
-                df_post = df_mas.loc[(df_mas['dataset']==dataset) & (df_mas[gc.columns.PRE_OR_POST]==gc.descriptives.POST_MED)]
+        for segment_category in ['short', 'moderately_long', 'long', 'very_long', 'overall']:
+            df_pre = df_mas.loc[(df_mas['dataset']==dataset) & (df_mas[gc.columns.PRE_OR_POST]==gc.descriptives.PRE_MED)]
+            df_post = df_mas.loc[(df_mas['dataset']==dataset) & (df_mas[gc.columns.PRE_OR_POST]==gc.descriptives.POST_MED)]
 
-                if segment_category != 'overall':
-                    df_pre = df_pre.loc[df_pre[gc.columns.PRED_GAIT_SEGMENT_CAT]==segment_category]
-                    df_post = df_post.loc[df_post[gc.columns.PRED_GAIT_SEGMENT_CAT]==segment_category]
+            if segment_category != 'overall':
+                df_pre = df_pre.loc[df_pre[gc.columns.PRED_GAIT_SEGMENT_CAT]==segment_category]
+                df_post = df_post.loc[df_post[gc.columns.PRED_GAIT_SEGMENT_CAT]==segment_category]
 
-                range_of_motion_pre_vals = df_pre[measure].values
-                range_of_motion_post_vals = df_post[measure].values
+            parameter_pre_vals = df_pre[parameter].values
+            parameter_post_vals = df_post[parameter].values
+            
+            if len(range_of_motion_pre_vals) != 0 and len(parameter_post_vals) != 0:
+                d_effect_size[dataset][segment_category] = {}
                 
-                if len(range_of_motion_pre_vals) != 0 and len(range_of_motion_post_vals) != 0:
-                    d_effect_size[stat][dataset][segment_category] = {}
+                # point estimate (median) of pre-med and post-med for the true sample
+                if stat == 'median':
+                    d_effect_size[dataset][segment_category]['mu_pre'] = np.median(parameter_pre_vals)
+                    d_effect_size[dataset][segment_category]['mu_post'] = np.median(parameter_post_vals)
+                elif stat == '95':
+                    d_effect_size[dataset][segment_category]['mu_pre'] = np.percentile(parameter_pre_vals, 95)
+                    d_effect_size[dataset][segment_category]['mu_post'] = np.percentile(parameter_post_vals, 95)
+
+                # boostrapping
+                bootstrap_pre = np.random.choice(parameter_pre_vals, size=(5000, len(parameter_pre_vals)), replace=True)
+                bootstrap_post = np.random.choice(parameter_post_vals, size=(5000, len(parameter_post_vals)), replace=True)
+
+                # point estimate using bootstrapping samples
+                if stat == 'median': 
+                    bootstrap_samples_pre = np.median(bootstrap_pre, axis=1)
+                    bootstrap_samples_post = np.median(bootstrap_post, axis=1)
+                elif stat == '95':
+                    bootstrap_samples_pre = np.percentile(bootstrap_pre, 95, axis=1)
+                    bootstrap_samples_post = np.percentile(bootstrap_post, 95, axis=1)
                     
-                    # point estimate (median) of pre-med and post-med for the true sample
-                    if stat == 'median':
-                        d_effect_size[stat][dataset][segment_category]['mu_pre'] = np.median(range_of_motion_pre_vals)
-                        d_effect_size[stat][dataset][segment_category]['mu_post'] = np.median(range_of_motion_post_vals)
-                    elif stat == '95':
-                        d_effect_size[stat][dataset][segment_category]['mu_pre'] = np.percentile(range_of_motion_pre_vals, 95)
-                        d_effect_size[stat][dataset][segment_category]['mu_post'] = np.percentile(range_of_motion_post_vals, 95)
+                # compute difference for std
+                bootstrap_samples_diff = bootstrap_samples_post - bootstrap_samples_pre
 
-                    # boostrapping
-                    bootstrap_pre = np.random.choice(range_of_motion_pre_vals, size=(5000, len(range_of_motion_pre_vals)), replace=True)
-                    bootstrap_post = np.random.choice(range_of_motion_post_vals, size=(5000, len(range_of_motion_post_vals)), replace=True)
+                # compute the std
+                std_bootstrap = np.std(bootstrap_samples_diff)
+                d_effect_size[dataset][segment_category]['std'] = std_bootstrap
 
-                    # point estimate using bootstrapping samples
-                    if stat == 'median': 
-                        bootstrap_samples_pre = np.median(bootstrap_pre, axis=1)
-                        bootstrap_samples_post = np.median(bootstrap_post, axis=1)
-                    elif stat == '95':
-                        bootstrap_samples_pre = np.percentile(bootstrap_pre, 95, axis=1)
-                        bootstrap_samples_post = np.percentile(bootstrap_post, 95, axis=1)
-                        
-                    # compute difference for std
-                    bootstrap_samples_diff = bootstrap_samples_post - bootstrap_samples_pre
-
-                    # compute the std
-                    std_bootstrap = np.std(bootstrap_samples_diff)
-                    d_effect_size[stat][dataset][segment_category]['std'] = std_bootstrap
-
-                    if segment_category == 'overall':
-                        d_diffs[dataset] = bootstrap_samples_diff
+                if segment_category == 'overall':
+                    d_diffs[dataset] = bootstrap_samples_diff
 
     return d_effect_size, d_diffs
 
 
-def generate_results_quantification():
+def generate_results_quantification(subject):
     # arm activity features
     df_features = pd.read_pickle(os.path.join(gc.paths.PATH_ARM_ACTIVITY_FEATURES, f'{subject}_mas.pkl'))
     df_ts = pd.read_pickle(os.path.join(gc.paths.PATH_ARM_ACTIVITY_FEATURES, f'{subject}_mas_ts.pkl'))
@@ -436,26 +433,53 @@ def generate_results_quantification():
     df_predictions[gc.columns.ARM_LABEL] = df_predictions.loc[~df_predictions[gc.columns.ARM_LABEL].isna(), gc.columns.ARM_LABEL].apply(lambda x: mp.arm_labels_rename[x])
 
     df = pd.merge(left=df, right=df_features, how='left', on=[gc.columns.TIME, gc.columns.PRE_OR_POST])
-    return
+
+    d_quantification = {}
+
+    d_quantification['unfiltered_gait'] = compute_aggregations(df, l_as_measures)
+
+    # filtered gait
+    d_quantification['filtered_gait'] = compute_aggregations(df.loc[df[gc.columns.PRED_OTHER_ARM_ACTIVITY]==0], l_as_measures)
+
+    # no other arm activity (annotated)
+    if subject in L_PD_IDS:
+        df_diff = pd.DataFrame()
+        d_quantification['true_no_other_arm_activity'] = compute_aggregations(df.loc[df['other_arm_activity_boolean']==0], l_as_measures)
+
+        es_mrom, diff_mrom = compute_effect_size(df, 'range_of_motion', 'median')
+        es_prom, diff_prom = compute_effect_size(df, 'range_of_motion', '95')
+
+        d_quantification['effect_size'] = {
+            'median_rom': es_mrom,
+            '95p_rom': es_prom
+        }
+
+        for dataset in diff_mrom.keys():
+            df_diff = pd.concat([df_diff, pd.DataFrame([subject, dataset, diff_mrom[dataset], diff_prom[dataset]]).T])
+
+        return d_quantification, df_diff
+    else:
+        return d_quantification
 
 
-def generate_results(l_steps):
-    d_clinical_scores = generate_clinical_scores(gc.participant_ids.L_PD_IDS)
+def generate_results(subject, l_steps):
+    # d_clinical_scores = generate_clinical_scores(gc.participant_ids.L_PD_IDS)
 
     d_output = {}
 
-    for subject in gc.participant_ids.L_PD_IDS + gc.participant_ids.L_HC_IDS:
-        for step in ['gait', 'arm_activity']:
-            if step in l_steps:
-                d_output[step] = generate_results_classification(
-                    step=step, 
-                    subject=subject,
-                    segment_gap_s=1.5
-                )
+    for step in ['gait', 'arm_activity']:
+        if step in l_steps:
+            print(f"Generating results for step: {step}")
+            d_output[step] = generate_results_classification(
+                step=step, 
+                subject=subject,
+                segment_gap_s=1.5
+            )
 
-        if 'quantification' in l_steps:
-            d_output['quantification'] = generate_results_quantification()
+    step = 'quantification'
 
-        return d_output, d_clinical_scores
+    if step in l_steps:
+        print(f"Generating results for step: {step}")
+        d_output[step], df_diff = generate_results_quantification(subject)
 
-
+    return d_output, df_diff
