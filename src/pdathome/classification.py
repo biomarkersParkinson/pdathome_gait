@@ -110,7 +110,7 @@ def train_test_filtering_gait(subject, l_classifiers, n_jobs=-1):
 
 
 def cv_train_test_model(subject, df, classifier_name, l_predictors, l_predictors_scale, target_column_name, 
-                        pred_proba_colname, pred_colname, step, n_jobs=-1):
+                        pred_proba_colname, step, n_jobs=-1):
 
     # Check for valid step
     if step not in ['gait', 'arm_activity']:
@@ -128,7 +128,8 @@ def cv_train_test_model(subject, df, classifier_name, l_predictors, l_predictors
     scaler = StandardScaler()
 
     # Scale the data
-    df_train.loc[pd_train_mask, l_predictors_scale] = scaler.fit_transform(df_train.loc[pd_train_mask, l_predictors_scale])
+    scaler.fit(df_train.loc[pd_train_mask, l_predictors_scale])
+    df_train[l_predictors_scale] = scaler.transform(df_train[l_predictors_scale])
     df_test[l_predictors_scale] = scaler.transform(df_test[l_predictors_scale])
 
     # Define train and test sets
@@ -168,11 +169,8 @@ def cv_train_test_model(subject, df, classifier_name, l_predictors, l_predictors
         fpr, _, thresholds = roc_curve(y_true=y_pop_train, y_score=y_train_pred_proba_pop, pos_label=1)
         threshold_index = np.argmax(fpr >= 0.05) - 1
         classification_threshold = thresholds[threshold_index]
-
-        df_test[pred_colname] = (df_test[pred_proba_colname] >= classification_threshold).astype(int)
     else:
-        df_test[pred_colname] = clf.predict(X_test)
-        classification_threshold = df_test.loc[df_test[pred_colname] == 1, pred_proba_colname].min()
+        classification_threshold = 0.5
     
     return df_test, classification_threshold
 
@@ -207,6 +205,8 @@ def windows_to_timestamps(subject, df, path_output, pred_proba_colname, step):
         l_groupby_cols.append(gc.columns.FREE_LIVING_LABEL)
     elif step == 'arm_activity':
         path_features = gc.paths.PATH_ARM_ACTIVITY_FEATURES
+        l_explode_cols.append(gc.columns.TRUE_GAIT_SEGMENT_NR)
+        l_groupby_cols.append(gc.columns.PRED_GAIT_SEGMENT_NR)
         if subject in gc.participant_ids.L_PD_IDS:
             l_subj_cols += [gc.columns.OTHER_ARM_ACTIVITY_MAJORITY_VOTING, gc.columns.ARM_LABEL_MAJORITY_VOTING]
 

@@ -145,7 +145,7 @@ def preprocess_gait_detection(subject):
 
         config.l_data_point_level_cols += [gc.columns.TIME, gc.columns.TRUE_GAIT_SEGMENT_NR, gc.columns.FREE_LIVING_LABEL]
         l_ts_cols = [gc.columns.TIME, gc.columns.TRUE_GAIT_SEGMENT_NR, gc.columns.WINDOW_NR, gc.columns.FREE_LIVING_LABEL]
-        l_export_cols = [gc.columns.TIME, gc.columns.WINDOW_NR, gc.columns.ACTIVITY_LABEL_MAJORITY_VOTING, gc.columns.GAIT_MAJORITY_VOTING] + list(config.d_channels_values.keys()) + ['total_power_below_gait', 'total_power_gait', 'total_power_tremor', 'total_power_above_tremor', 'total_power']
+        l_export_cols = [gc.columns.TIME, gc.columns.WINDOW_NR, gc.columns.ACTIVITY_LABEL_MAJORITY_VOTING, gc.columns.GAIT_MAJORITY_VOTING] + list(config.d_channels_values.keys())
         l_single_value_cols = None
         if subject in gc.participant_ids.L_PD_IDS:
             config.l_data_point_level_cols.append(gc.columns.ARM_LABEL)
