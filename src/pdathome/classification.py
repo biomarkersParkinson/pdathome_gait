@@ -69,8 +69,9 @@ def train_test(
             step=step
         )
 
-        with open(os.path.join(gc.paths.PATH_THRESHOLDS, step, f'{classifier_name}_{subject}.txt'), 'w') as f:
-            f.write(str(classification_threshold))
+        if step == 'gait':
+            with open(os.path.join(gc.paths.PATH_THRESHOLDS, step, f'{classifier_name}_{subject}.txt'), 'w') as f:
+                f.write(str(classification_threshold))
 
 
 def train_test_gait_detection(subject, l_classifiers, n_jobs=-1):
@@ -92,19 +93,20 @@ def train_test_gait_detection(subject, l_classifiers, n_jobs=-1):
 
 def train_test_filtering_gait(subject, l_classifiers, n_jobs=-1):
     print(f"Filtering gait - Train-testing with LOSO - {subject} ...")
-    train_test(
-        subject=subject,
-        l_ids=gc.participant_ids.L_PD_IDS,
-        config_class=ArmSwingFeatureExtractionConfig,
-        l_classifiers=l_classifiers,
-        target_column_name=gc.columns.OTHER_ARM_ACTIVITY_MAJORITY_VOTING,
-        pred_proba_colname=gc.columns.PRED_OTHER_ARM_ACTIVITY_PROBA,
-        pred_colname=gc.columns.PRED_OTHER_ARM_ACTIVITY,
-        step='arm_activity',
-        path_features=gc.paths.PATH_ARM_ACTIVITY_FEATURES,
-        path_predictions=gc.paths.PATH_ARM_ACTIVITY_PREDICTIONS,
-        n_jobs=n_jobs
-    )
+    if subject in gc.participant_ids.L_PD_IDS:
+        train_test(
+            subject=subject,
+            l_ids=gc.participant_ids.L_PD_IDS,
+            config_class=ArmSwingFeatureExtractionConfig,
+            l_classifiers=l_classifiers,
+            target_column_name=gc.columns.OTHER_ARM_ACTIVITY_MAJORITY_VOTING,
+            pred_proba_colname=gc.columns.PRED_OTHER_ARM_ACTIVITY_PROBA,
+            pred_colname=gc.columns.PRED_OTHER_ARM_ACTIVITY,
+            step='arm_activity',
+            path_features=gc.paths.PATH_ARM_ACTIVITY_FEATURES,
+            path_predictions=gc.paths.PATH_ARM_ACTIVITY_PREDICTIONS,
+            n_jobs=n_jobs
+        )
 
 
 def cv_train_test_model(subject, df, classifier_name, l_predictors, l_predictors_scale, target_column_name, 
@@ -306,26 +308,6 @@ def store_model_output(df, classifier_name, step, n_jobs=-1):
         
         json.dump(coefficients, f, indent=4)
 
-    # Load individual thresholds and store the mean
-    thresholds = []
-    
-    if step == 'gait':
-        l_ids = gc.participant_ids.L_PD_IDS + gc.participant_ids.L_HC_IDS
-    else:
-        l_ids = gc.participant_ids.L_PD_IDS 
-
-    for subject in l_ids:
-        with open(os.path.join(gc.paths.PATH_THRESHOLDS, step, f'{classifier_name}_{subject}.txt'), 'r') as f:
-            thresholds.append(float(f.read()))
-
-    mean_threshold = np.mean(thresholds)
-    with open(os.path.join(gc.paths.PATH_THRESHOLDS, step, f'{classifier_name}.txt'), 'w') as f:
-        f.write(str(mean_threshold))
-
-    # Delete individual thresholds
-    for subject in l_ids:
-        os.remove(os.path.join(gc.paths.PATH_THRESHOLDS, step, f'{classifier_name}_{subject}.txt')) 
-
     # Save the scaler parameters as JSON
     scaler_params = {
         'mean': scaler.mean_.tolist(),
@@ -341,9 +323,29 @@ def store_model_output(df, classifier_name, step, n_jobs=-1):
     with open(scaler_path, 'w') as f:
         json.dump(scaler_params, f)
 
+    # Load individual thresholds and store the mean
+    if step == 'gait':
+        thresholds = []
+        
+        l_ids = gc.participant_ids.L_PD_IDS + gc.participant_ids.L_HC_IDS
+
+        for subject in l_ids:
+            with open(os.path.join(gc.paths.PATH_THRESHOLDS, step, f'{classifier_name}_{subject}.txt'), 'r') as f:
+                thresholds.append(float(f.read()))
+
+        mean_threshold = np.mean(thresholds)
+        with open(os.path.join(gc.paths.PATH_THRESHOLDS, step, f'{classifier_name}.txt'), 'w') as f:
+            f.write(str(mean_threshold))
+
+        # Delete individual thresholds
+        for subject in l_ids:
+            os.remove(os.path.join(gc.paths.PATH_THRESHOLDS, step, f'{classifier_name}_{subject}.txt')) 
+
     if step == 'arm_activity':       
         # Predict arm activity for the controls
         predict_controls(clf, scaler, classifier_name, l_predictors, l_predictors_scaled, step)
+
+    
 
 
 def predict_controls(clf, scaler, classifier_name, l_predictors, l_predictors_scaled, step):
