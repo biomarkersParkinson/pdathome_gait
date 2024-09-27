@@ -84,6 +84,8 @@ class Columns:
     ANGLE_SMOOTH: str = 'angle_smooth'
     VELOCITY: str = 'velocity'
     WINDOW_NR: str = 'window_nr'
+    SEGMENT_NR: str = 'segment_nr'
+    SEGMENT_CAT: str = 'segment_cat'
     TRUE_GAIT_SEGMENT_NR: str = 'true_gait_segment_nr'
     PRED_GAIT_SEGMENT_NR: str = 'pred_gait_segment_nr'
     TRUE_GAIT_SEGMENT_CAT: str = 'true_gait_segment_cat'

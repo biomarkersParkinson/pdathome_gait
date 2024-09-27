@@ -8,7 +8,6 @@ from typing import Union, List
 
 from collections import Counter
 from scipy.interpolate import CubicSpline
-from scipy import signal
 
 from paradigma.feature_extraction import extract_temporal_domain_features, extract_spectral_domain_features, \
     pca_transform_gyroscope, compute_angle, remove_moving_average_angle, signal_to_ffts, get_dominant_frequency, \
@@ -18,114 +17,13 @@ from paradigma.imu_preprocessing import butterworth_filter
 from paradigma.preprocessing_config import IMUPreprocessingConfig
 from paradigma.windowing import tabulate_windows, create_segments, discard_segments, categorize_segments
 
-from pdathome.constants import global_constants as gc, Mappings as mp
+from pdathome.constants import global_constants as gc, mappings as mp
 from pdathome.load import load_stage_start_end, load_sensor_data, load_video_annotations
 from pdathome.utils import save_to_pickle
 
 
 import pandas as pd
 import numpy as np
-
-def extract_angle_extremes_2(
-        df: pd.DataFrame,
-        angle_colname: str,
-        dominant_frequency_colname: str,
-        sampling_frequency: int = 100,
-    ) -> pd.Series:
-    """Extract the peaks of the angle (minima and maxima) from the smoothed angle signal that adhere to a set of specific requirements.
-    
-    Parameters
-    ----------
-    df: pd.DataFrame
-        The dataframe containing the angle signal
-    angle_colname: str
-        The name of the column containing the smoothed angle signal
-    dominant_frequency_colname: str
-        The name of the column containing the dominant frequency
-    sampling_frequency: int
-        The sampling frequency of the data (default: 100)
-
-    Returns
-    -------
-    pd.Series
-        The extracted angle extremes (peaks)
-    """
-    # determine peaks
-    df[f'{angle_colname}_maxima'] = df.apply(
-        lambda x: signal.find_peaks(
-            x[angle_colname],
-            distance=sampling_frequency * 0.6 / x[dominant_frequency_colname], 
-            prominence=0.5
-        )[0], axis=1
-    )
-    df[f'{angle_colname}_minima'] = df.apply(
-        lambda x: signal.find_peaks(
-            [-x for x in x[angle_colname]], 
-            distance=sampling_frequency * 0.6 / x[dominant_frequency_colname], 
-            prominence=0.5
-        )[0], axis=1
-    ) 
-
-    df[f'{angle_colname}_maxima'] = df[f'{angle_colname}_maxima'].apply(lambda x: x if isinstance(x, list) else x.tolist())
-    df[f'{angle_colname}_minima'] = df[f'{angle_colname}_minima'].apply(lambda x: x if isinstance(x, list) else x.tolist())
-
-    df[f'{angle_colname}_new_minima'] = df[f'{angle_colname}_minima'].copy()
-    df[f'{angle_colname}_new_maxima'] = df[f'{angle_colname}_maxima'].copy()
-
-    for index, _ in df.iterrows():
-        i_pks = 0                                       # iterable to keep track of consecutive min-min and max-max versus min-max
-        n_min = len(df.loc[index, f'{angle_colname}_new_minima'])  # number of minima in window
-        n_max = len(df.loc[index, f'{angle_colname}_new_maxima'])  # number of maxima in window
-
-        if n_min > 0 and n_max > 0: 
-            if df.loc[index, f'{angle_colname}_new_maxima'][0] > df.loc[index, f'{angle_colname}_new_minima'][0]: # if first minimum occurs before first maximum, start with minimum
-                while i_pks < n_min - 1 and i_pks < n_max: # only continue if there's enough minima and maxima to perform operations
-                    if df.loc[index, f'{angle_colname}_new_minima'][i_pks+1] < df.loc[index, f'{angle_colname}_new_maxima'][i_pks]: # if angle of next minimum comes before the current maxima, we have two minima in a row
-                        if df.loc[index, angle_colname][df.loc[index, f'{angle_colname}_new_minima'][i_pks+1]] < df.loc[index, angle_colname][df.loc[index, f'{angle_colname}_new_minima'][i_pks]]: # if second minimum if smaller than first, keep second
-                            df.at[index, f'{angle_colname}_new_minima'] = np.delete(df.loc[index, f'{angle_colname}_new_minima'], i_pks).tolist()
-                        else: # otherwise keep the first
-                            df.at[index, f'{angle_colname}_new_minima'] = np.delete(df.loc[index, f'{angle_colname}_new_minima'], i_pks+1).tolist()
-                        n_min -= 1
-                        i_pks -= 1
-                    if i_pks >= 0 and df.loc[index, f'{angle_colname}_new_minima'][i_pks] > df.loc[index, f'{angle_colname}_new_maxima'][i_pks]:
-                        if df.loc[index, angle_colname][df.loc[index, f'{angle_colname}_new_maxima'][i_pks]] < df.loc[index, angle_colname][df.loc[index, f'{angle_colname}_new_maxima'][i_pks-1]]:
-                            df.at[index, f'{angle_colname}_new_maxima'] = np.delete(df.loc[index, f'{angle_colname}_new_maxima'], i_pks).tolist()
-                        else:
-                            df.at[index, f'{angle_colname}_new_maxima'] = np.delete(df.loc[index, f'{angle_colname}_new_maxima'], i_pks-1).tolist()
-                        n_max -= 1
-                        i_pks -= 1
-                    i_pks += 1
-
-            elif df.loc[index, f'{angle_colname}_new_maxima'][0] < df.loc[index, f'{angle_colname}_new_minima'][0]: # if the first maximum occurs before the first minimum, start with the maximum
-                while i_pks < n_min and i_pks < n_max - 1:
-                    if df.loc[index, f'{angle_colname}_new_minima'][i_pks] > df.loc[index, f'{angle_colname}_new_maxima'][i_pks+1]:
-                        if df.loc[index, angle_colname][df.loc[index, f'{angle_colname}_new_maxima'][i_pks+1]] > df.loc[index, angle_colname][df.loc[index, f'{angle_colname}_new_maxima'][i_pks]]:
-                            df.at[index, f'{angle_colname}_new_maxima'] = np.delete(df.loc[index, f'{angle_colname}_new_maxima'], i_pks).tolist()
-                        else:
-                            df.at[index, f'{angle_colname}_new_maxima'] = np.delete(df.loc[index, f'{angle_colname}_new_maxima'], i_pks+1).tolist()
-                        n_max -= 1
-                        i_pks -= 1
-                    if i_pks > 0 and df.loc[index, f'{angle_colname}_new_minima'][i_pks] < df.loc[index, f'{angle_colname}_new_maxima'][i_pks]:
-                        if df.loc[index, angle_colname][df.loc[index, f'{angle_colname}_new_minima'][i_pks]] < df.loc[index, angle_colname][df.loc[index, f'{angle_colname}_new_minima'][i_pks-1]]:
-                            df.at[index, f'{angle_colname}_new_minima'] = np.delete(df.loc[index, f'{angle_colname}_new_minima'], i_pks-1).tolist()
-                        else:
-                            df.at[index, f'{angle_colname}_new_minima'] = np.delete(df.loc[index, f'{angle_colname}_new_minima'], i_pks).tolist()
-                        n_min -= 1
-                        i_pks -= 1
-                    i_pks += 1
-
-    # for some peculiar reason, if a single item remains in the row for {angle_colname}_new_minima or
-    # angle_new_maxima, it could be either a scalar or a vector.
-    for col in [f'{angle_colname}_new_minima', f'{angle_colname}_new_maxima']:
-        df[col] = df[col].apply(lambda x: [x] if not isinstance(x, list) else x)
-
-    # extract amplitude
-    df[f'{angle_colname}_extrema_values'] = df.apply(
-        lambda x: [x[angle_colname][i] for i in sorted(x[f'{angle_colname}_new_minima'] + x[f'{angle_colname}_new_maxima'])],
-        axis=1
-    ) 
-
-    return df[f'{angle_colname}_extrema_values']
 
 
 def prepare_data(subject):
@@ -235,18 +133,19 @@ def preprocess_gait_detection(subject):
 
         # Drop original accelerometer gc.columns and append filtered results
         df = df.drop(columns=accel_cols).rename(columns={f'filt_{col}': col for col in accel_cols})
-        
+
+        # Group consecutive timestamps into segments with new segments starting after a pre-specified gap
         df[gc.columns.TRUE_GAIT_SEGMENT_NR] = create_segments(
-            df=df.loc[df['gait_boolean'] == 1],
+            df=df,
             time_column_name=gc.columns.TIME,
-            gap_threshold_s=1.5
+            gap_threshold_s=gc.parameters.SEGMENT_GAP_GAIT
         )
 
         config = GaitFeatureExtractionConfig()
 
         config.l_data_point_level_cols += [gc.columns.TIME, gc.columns.TRUE_GAIT_SEGMENT_NR, gc.columns.FREE_LIVING_LABEL]
         l_ts_cols = [gc.columns.TIME, gc.columns.TRUE_GAIT_SEGMENT_NR, gc.columns.WINDOW_NR, gc.columns.FREE_LIVING_LABEL]
-        l_export_cols = [gc.columns.TIME, gc.columns.WINDOW_NR, gc.columns.ACTIVITY_LABEL_MAJORITY_VOTING, gc.columns.GAIT_MAJORITY_VOTING] + list(config.d_channels_values.keys())
+        l_export_cols = [gc.columns.TIME, gc.columns.WINDOW_NR, gc.columns.ACTIVITY_LABEL_MAJORITY_VOTING, gc.columns.GAIT_MAJORITY_VOTING] + list(config.d_channels_values.keys()) + ['total_power_below_gait', 'total_power_gait', 'total_power_tremor', 'total_power_above_tremor', 'total_power']
         l_single_value_cols = None
         if subject in gc.participant_ids.L_PD_IDS:
             config.l_data_point_level_cols.append(gc.columns.ARM_LABEL)
@@ -317,9 +216,9 @@ def preprocess_filtering_gait(subject):
 
         # Configure gc.columns based on cohort
         if subject in gc.participant_ids.L_PD_IDS:
-            l_cols_to_export = [gc.columns.TIME, gc.columns.PRED_GAIT_SEGMENT_NR, gc.columns.WINDOW_NR, gc.columns.ARM_LABEL, gc.columns.PRE_OR_POST]
+            l_cols_to_export = [gc.columns.TIME, gc.columns.TRUE_GAIT_SEGMENT_NR, gc.columns.PRED_GAIT_SEGMENT_NR, gc.columns.WINDOW_NR, gc.columns.ARM_LABEL, gc.columns.PRE_OR_POST]
         else:
-            l_cols_to_export = [gc.columns.TIME, gc.columns.PRED_GAIT_SEGMENT_NR, gc.columns.WINDOW_NR]
+            l_cols_to_export = [gc.columns.TIME, gc.columns.TRUE_GAIT_SEGMENT_NR, gc.columns.PRED_GAIT_SEGMENT_NR, gc.columns.WINDOW_NR]
 
         # Load sensor data
         df_sensors = pd.read_pickle(os.path.join(gc.paths.PATH_PREPARED_DATA, f'{subject}_{side}.pkl'))
@@ -384,7 +283,7 @@ def preprocess_filtering_gait(subject):
 
         # Remove the moving average from the angle to account for possible drift caused by the integration
         # of noise in the angular velocity
-        df[gc.columns.ANGLE_SMOOTH] = remove_moving_average_angle(
+        df[gc.columns.ANGLE] = remove_moving_average_angle(
             angle_col=df[gc.columns.ANGLE],
             sampling_frequency=arm_activity_config.sampling_frequency
         )
@@ -393,18 +292,15 @@ def preprocess_filtering_gait(subject):
         if subject in gc.participant_ids.L_PD_IDS:
             df = df[df[gc.columns.ARM_LABEL] != 'cant assess']
 
-        # Group consecutive timestamps into segments with new segments starting after a pre-specified gap
-        df[gc.columns.TRUE_GAIT_SEGMENT_NR] = create_segments(
-            df=df.loc[df['gait_boolean']==1],
+        # Create the segments for the subset of 'Walking' data
+        walking_segments = create_segments(
+            df=df.loc[df[gc.columns.FREE_LIVING_LABEL] == 'Walking'],
             time_column_name=gc.columns.TIME,
-            gap_threshold_s=gc.parameters.SEGMENT_GAP_GAIT
+            gap_threshold_s=arm_activity_config.window_length_s
         )
 
-        df[gc.columns.TRUE_GAIT_SEGMENT_CAT] = categorize_segments(
-            df=df.loc[df['gait_boolean']==1],
-            segment_nr_colname=gc.columns.TRUE_GAIT_SEGMENT_NR,
-            sampling_frequency=gc.parameters.DOWNSAMPLED_FREQUENCY
-        )
+        # Assign the result back to the TRUE_GAIT_SEGMENT_NR column for the relevant rows
+        df.loc[df[gc.columns.FREE_LIVING_LABEL] == 'Walking', gc.columns.TRUE_GAIT_SEGMENT_NR] = walking_segments
         
         # Use only predicted gait for the subsequent steps
         df = df[df[gc.columns.PRED_GAIT] == 1].reset_index(drop=True)
@@ -416,12 +312,6 @@ def preprocess_filtering_gait(subject):
             gap_threshold_s=gc.parameters.SEGMENT_GAP_GAIT
         )
 
-        df[gc.columns.PRED_GAIT_SEGMENT_CAT] = categorize_segments(
-            df=df,
-            segment_nr_colname=gc.columns.PRED_GAIT_SEGMENT_NR,
-            sampling_frequency=gc.parameters.DOWNSAMPLED_FREQUENCY
-        )
-
         # Remove any segments that do not adhere to predetermined criteria
         df = discard_segments(
             df=df,
@@ -431,16 +321,11 @@ def preprocess_filtering_gait(subject):
         )
 
         # Create windows of fixed length and step size from the time series
-        arm_activity_config.l_data_point_level_cols += [
-            gc.columns.TRUE_GAIT_SEGMENT_NR, gc.columns.TRUE_GAIT_SEGMENT_CAT
-        ]
+        arm_activity_config.l_data_point_level_cols.append(gc.columns.TRUE_GAIT_SEGMENT_NR)
+        l_single_value_cols = [gc.columns.PRED_GAIT_SEGMENT_NR]
         if subject in gc.participant_ids.L_PD_IDS:
-            l_single_value_cols = [
-                gc.columns.PRE_OR_POST, gc.columns.PRED_GAIT_SEGMENT_NR, gc.columns.PRED_GAIT_SEGMENT_CAT
-            ]
+            l_single_value_cols.append(gc.columns.PRE_OR_POST)
             arm_activity_config.l_data_point_level_cols.append(gc.columns.ARM_LABEL)
-        else:
-            l_single_value_cols = None
 
         l_dfs = [
             tabulate_windows(
@@ -470,7 +355,7 @@ def preprocess_filtering_gait(subject):
 
         # Transform the angle from the temporal domain to the spectral domain using the fast fourier transform
         df_windowed[f'{gc.columns.ANGLE}_freqs'], df_windowed[f'{gc.columns.ANGLE}_fft'] = signal_to_ffts(
-            sensor_col=df_windowed[gc.columns.ANGLE_SMOOTH],
+            sensor_col=df_windowed[gc.columns.ANGLE],
             window_type=arm_activity_config.window_type,
             sampling_frequency=arm_activity_config.sampling_frequency
         )
@@ -490,7 +375,7 @@ def preprocess_filtering_gait(subject):
         df_windowed = df_windowed.drop(columns=[f'{gc.columns.ANGLE}_fft', f'{gc.columns.ANGLE}_freqs'])
 
         # Compute the percentage of power in the frequency band of interest (i.e., the frequency band of the arm swing)
-        df_windowed[f'{gc.columns.ANGLE}_perc_power'] = df_windowed[gc.columns.ANGLE_SMOOTH].apply(
+        df_windowed[f'{gc.columns.ANGLE}_perc_power'] = df_windowed[gc.columns.ANGLE].apply(
             lambda x: compute_perc_power(
                 sensor_col=x,
                 fmin_band=arm_activity_config.power_band_low_frequency,
@@ -503,12 +388,13 @@ def preprocess_filtering_gait(subject):
         )
 
         # Determine the extrema (minima and maxima) of the angle signal
-        df_windowed[f'{angle_colname}_extrema_values'] = extract_angle_extremes_2(
-            df=df_windowed,
-            angle_colname=gc.columns.ANGLE_SMOOTH,
-            dominant_frequency_colname=f'{gc.columns.ANGLE}_dominant_frequency',
-            sampling_frequency=arm_activity_config.sampling_frequency
-        )
+        df_windowed = extract_angle_extremes(
+                df=df_windowed,
+                angle_colname=gc.columns.ANGLE,
+                dominant_frequency_colname=f'{gc.columns.ANGLE}_dominant_frequency',
+                sampling_frequency=arm_activity_config.sampling_frequency
+            )
+                
 
         # Calculate the change in angle between consecutive extrema (minima and maxima) of the angle signal inside the window
         df_windowed[f'{gc.columns.ANGLE}_amplitudes'] = extract_range_of_motion(angle_extrema_values_col=df_windowed[f'{gc.columns.ANGLE}_extrema_values'])

@@ -74,7 +74,7 @@ def train_test(
                 f.write(str(classification_threshold))
 
 
-def train_test_gait_detection(subject, l_classifiers, n_jobs):
+def train_test_gait_detection(subject, l_classifiers, n_jobs=-1):
     print(f"Gait detection - Train-testing with LOSO - {subject} ...")
     train_test(
         subject=subject,
@@ -91,7 +91,7 @@ def train_test_gait_detection(subject, l_classifiers, n_jobs):
     )
 
 
-def train_test_filtering_gait(subject, l_classifiers, n_jobs):
+def train_test_filtering_gait(subject, l_classifiers, n_jobs=-1):
     print(f"Filtering gait - Train-testing with LOSO - {subject} ...")
     if subject in gc.participant_ids.L_PD_IDS:
         train_test(
