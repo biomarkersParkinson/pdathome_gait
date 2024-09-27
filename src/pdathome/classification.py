@@ -203,7 +203,7 @@ def windows_to_timestamps(subject, df, path_output, pred_proba_colname, step):
     if step == 'gait':
         l_subj_cols += [gc.columns.GAIT_MAJORITY_VOTING, gc.columns.ACTIVITY_LABEL_MAJORITY_VOTING]
         path_features = gc.paths.PATH_GAIT_FEATURES
-        l_explode_cols += [gc.columns.FREE_LIVING_LABEL, gc.columns.SEGMENT_NR_TRUE_GAIT]
+        l_explode_cols += [gc.columns.FREE_LIVING_LABEL, gc.columns.TRUE_GAIT_SEGMENT_NR]
         l_groupby_cols.append(gc.columns.FREE_LIVING_LABEL)
     elif step == 'arm_activity':
         path_features = gc.paths.PATH_ARM_ACTIVITY_FEATURES
