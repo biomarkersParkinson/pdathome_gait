@@ -49,9 +49,18 @@ def plot_coefs(d_coefs, classifier, color=gc.plot_parameters.COLOR_PALETTE_FIRST
     plt.show()
 
 
+def plot_n_subjects(d_performance, x_loc, ax):
+    for j, label in enumerate(d_performance.keys()):
+        l_spec = len(d_performance[label])
+        if l_spec == 1:
+            ax.text(x_loc, j*1, f"{l_spec} subject")
+        elif l_spec > 0:
+            ax.text(x_loc, j*1, f"{l_spec} subjects")
+
+
 def generate_clinical_scores(l_ids):
     df_patient_info = pd.read_pickle(os.path.join(gc.paths.PATH_CLINICAL_DATA, 'df_patient_info_updrs_3.pkl'))
-    df_patient_info = df_patient_info.loc[df_patient_info['record_id'].isin(gc.participant_ids.L_PD_IDS)].reset_index(drop=True)
+    df_patient_info = df_patient_info.loc[df_patient_info['record_id'].isin(gc.participant_ids.gc.participant_ids.L_PD_IDS)].reset_index(drop=True)
     df_patient_info['age'] = datetime.datetime.now().year - df_patient_info['year_of_birth']
     df_patient_info['years_since_diagnosis'] = datetime.datetime.now().year - df_patient_info['year_diagnosis']
     df_patient_info['gender'] = df_patient_info['gender'].apply(lambda x: 'male' if x==1 else 'female')
@@ -92,31 +101,31 @@ def generate_clinical_scores(l_ids):
 def generate_results_classification(step, subject, segment_gap_s):
 
     d_performance = {}
-
-    if step == 'gait':
-        # paths
-        path_predictions = gc.paths.PATH_GAIT_PREDICTIONS
-
-        # columns
-        pred_proba_colname = gc.columns.PRED_GAIT_PROBA
-        pred_colname = gc.columns.PRED_GAIT
-
-        # classification threshold
-        with open(os.path.join(gc.paths.PATH_THRESHOLDS, step, f'{model}_threshold.txt'), 'r') as f:
-            clf_threshold = np.mean(float(f.read()))
-    else:
-        # paths
-        path_predictions = gc.paths.PATH_ARM_ACTIVITY_PREDICTIONS
-
-        # columns
-        pred_proba_colname = gc.columns.PRED_OTHER_ARM_ACTIVITY_PROBA
-        pred_colname = gc.columns.PRED_OTHER_ARM_ACTIVITY
-
-        # classification threshold
-        clf_threshold = 0.5
-    
+  
     for model in [gc.classifiers.LOGISTIC_REGRESSION, gc.classifiers.RANDOM_FOREST]:
         d_performance[model] = {}
+
+        if step == 'gait':
+            # paths
+            path_predictions = gc.paths.PATH_GAIT_PREDICTIONS
+
+            # columns
+            pred_proba_colname = gc.columns.PRED_GAIT_PROBA
+            pred_colname = gc.columns.PRED_GAIT
+
+            # classification threshold
+            with open(os.path.join(gc.paths.PATH_THRESHOLDS, step, f'{model}.txt'), 'r') as f:
+                clf_threshold = float(f.read())
+        else:
+            # paths
+            path_predictions = gc.paths.PATH_ARM_ACTIVITY_PREDICTIONS
+
+            # columns
+            pred_proba_colname = gc.columns.PRED_OTHER_ARM_ACTIVITY_PROBA
+            pred_colname = gc.columns.PRED_OTHER_ARM_ACTIVITY
+
+            # classification threshold
+            clf_threshold = 0.5
         
         # predictions
         df_predictions = pd.read_pickle(os.path.join(path_predictions, model, f'{subject}.pkl'))
@@ -190,7 +199,6 @@ def generate_results_classification(step, subject, segment_gap_s):
                 df_gait[gc.columns.SEGMENT_NR] = create_segments(
                     df=df_gait,
                     time_column_name=gc.columns.TIME,
-                    segment_column_name=gc.columns.SEGMENT_NR,
                     gap_threshold_s=segment_gap_s
                 )
 
@@ -371,7 +379,7 @@ def compute_effect_size(df, parameter, stat):
             parameter_pre_vals = df_pre[parameter].values
             parameter_post_vals = df_post[parameter].values
             
-            if len(range_of_motion_pre_vals) != 0 and len(parameter_post_vals) != 0:
+            if len(parameter_pre_vals) != 0 and len(parameter_post_vals) != 0:
                 d_effect_size[dataset][segment_category] = {}
                 
                 # point estimate (median) of pre-med and post-med for the true sample
@@ -408,6 +416,7 @@ def compute_effect_size(df, parameter, stat):
 
 
 def generate_results_quantification(subject):
+    l_measures = ['median_rom', '95p_rom']
     # arm activity features
     df_features = pd.read_pickle(os.path.join(gc.paths.PATH_ARM_ACTIVITY_FEATURES, f'{subject}_mas.pkl'))
     df_ts = pd.read_pickle(os.path.join(gc.paths.PATH_ARM_ACTIVITY_FEATURES, f'{subject}_mas_ts.pkl'))
@@ -436,15 +445,15 @@ def generate_results_quantification(subject):
 
     d_quantification = {}
 
-    d_quantification['unfiltered_gait'] = compute_aggregations(df, l_as_measures)
+    d_quantification['unfiltered_gait'] = compute_aggregations(df, l_measures)
 
     # filtered gait
-    d_quantification['filtered_gait'] = compute_aggregations(df.loc[df[gc.columns.PRED_OTHER_ARM_ACTIVITY]==0], l_as_measures)
+    d_quantification['filtered_gait'] = compute_aggregations(df.loc[df[gc.columns.PRED_OTHER_ARM_ACTIVITY]==0], l_measures)
 
     # no other arm activity (annotated)
-    if subject in L_PD_IDS:
+    if subject in gc.participant_ids.L_PD_IDS:
         df_diff = pd.DataFrame()
-        d_quantification['true_no_other_arm_activity'] = compute_aggregations(df.loc[df['other_arm_activity_boolean']==0], l_as_measures)
+        d_quantification['true_no_other_arm_activity'] = compute_aggregations(df.loc[df['other_arm_activity_boolean']==0], l_measures)
 
         es_mrom, diff_mrom = compute_effect_size(df, 'range_of_motion', 'median')
         es_prom, diff_prom = compute_effect_size(df, 'range_of_motion', '95')
@@ -463,7 +472,7 @@ def generate_results_quantification(subject):
 
 
 def generate_results(subject, l_steps):
-    # d_clinical_scores = generate_clinical_scores(gc.participant_ids.L_PD_IDS)
+    # d_clinical_scores = generate_clinical_scores(gc.participant_ids.gc.participant_ids.L_PD_IDS)
 
     d_output = {}
 
