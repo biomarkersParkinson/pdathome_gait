@@ -335,39 +335,44 @@ def generate_results_classification(step, subject, segment_gap_s):
     return d_performance
 
 
-def load_arm_activity_data(subject: str, side: str) -> pd.DataFrame:
+def load_arm_activity_features(subject: str, side: str) -> pd.DataFrame:
     """Load arm activity features for a given subject and side."""
     df_features = pd.read_pickle(os.path.join(gc.paths.PATH_ARM_ACTIVITY_FEATURES, f'{subject}_{side}.pkl'))
     df_features[gc.columns.SIDE] = side
     return df_features
+
+def load_arm_activity_timestamps(subject: str, side: str) -> pd.DataFrame:
+    """Load arm activity timestamps for a given subject and side."""
+    return pd.read_pickle(os.path.join(gc.paths.PATH_ARM_ACTIVITY_FEATURES, f'{subject}_{side}_ts.pkl'))
 
 
 def generate_results_quantification(subject: str) -> tuple[dict, pd.DataFrame]:
     """Generate quantification results for a given subject."""
     classification_threshold = 0.5
 
-    # arm activity features
-    df_features_mas = pd.read_pickle(os.path.join(gc.paths.PATH_ARM_ACTIVITY_FEATURES, f'{subject}_mas.pkl'))
-    df_features_mas[gc.columns.SIDE] = gc.descriptives.MOST_AFFECTED_SIDE
-    df_features_las = pd.read_pickle(os.path.join(gc.paths.PATH_ARM_ACTIVITY_FEATURES, f'{subject}_las.pkl'))
-    df_features_las[gc.columns.SIDE] = gc.descriptives.LEAST_AFFECTED_SIDE
+    # Load arm activity features for both sides
+    df_features_mas = load_arm_activity_features(subject, gc.descriptives.MOST_AFFECTED_SIDE)
+    df_features_las = load_arm_activity_features(subject, gc.descriptives.LEAST_AFFECTED_SIDE)
+
+    # Combine features and preprocess
     df_features = pd.concat([df_features_mas, df_features_las], axis=0).reset_index(drop=True)
-
-    df_ts_mas = pd.read_pickle(os.path.join(gc.paths.PATH_ARM_ACTIVITY_FEATURES, f'{subject}_mas_ts.pkl'))
-    df_ts_mas[gc.columns.SIDE] = gc.descriptives.MOST_AFFECTED_SIDE
-    df_ts_las = pd.read_pickle(os.path.join(gc.paths.PATH_ARM_ACTIVITY_FEATURES, f'{subject}_las_ts.pkl'))
-    df_ts_las[gc.columns.SIDE] = gc.descriptives.LEAST_AFFECTED_SIDE
-    df_ts = pd.concat([df_ts_mas, df_ts_las], axis=0).reset_index(drop=True)
-
-    df_features['peak_velocity'] = (df_features['forward_peak_ang_vel_mean'] + df_features['backward_peak_ang_vel_mean'])/2
+    df_features['peak_velocity'] = (df_features['forward_peak_ang_vel_mean'] + df_features['backward_peak_ang_vel_mean']) / 2
     df_features = df_features.drop(columns=[gc.columns.TIME])
 
+    # Load timestamps for both sides
+    df_ts_mas = load_arm_activity_timestamps(subject, gc.descriptives.MOST_AFFECTED_SIDE)
+    df_ts_las = load_arm_activity_timestamps(subject, gc.descriptives.LEAST_AFFECTED_SIDE)
+
+    df_ts = pd.concat([df_ts_mas, df_ts_las], axis=0).reset_index(drop=True)
+
+    # Explode the timestamps DataFrame
     df_ts_exploded = df_ts.explode([
         gc.columns.TIME, gc.columns.ARM_LABEL, gc.columns.TRUE_GAIT_SEGMENT_NR,
         gc.columns.TRUE_GAIT_SEGMENT_CAT, gc.columns.FREE_LIVING_LABEL
         ]
     )
     
+    # Merge features with exploded timestamps
     df_features = pd.merge(
         left=df_features, 
         right=df_ts_exploded, 
@@ -378,6 +383,7 @@ def generate_results_quantification(subject: str) -> tuple[dict, pd.DataFrame]:
         ]
     )
     
+    # Group by relevant columns and compute mean for features
     df_features = df_features.groupby([
         gc.columns.SIDE, gc.columns.TIME, gc.columns.PRED_GAIT_SEGMENT_NR,
         gc.columns.PRED_GAIT_SEGMENT_CAT, gc.columns.TRUE_GAIT_SEGMENT_CAT,
@@ -385,17 +391,19 @@ def generate_results_quantification(subject: str) -> tuple[dict, pd.DataFrame]:
         ]
     )[['peak_velocity', 'range_of_motion']].mean().reset_index()
 
-    # arm activity predictions
+    # Load arm activity predictions
     df_predictions = pd.read_pickle(os.path.join(gc.paths.PATH_ARM_ACTIVITY_PREDICTIONS, gc.classifiers.LOGISTIC_REGRESSION, f'{subject}.pkl'))
 
-    # set pred rounded
+    # Set pred rounded based on the threshold
     df_predictions[gc.columns.PRED_OTHER_ARM_ACTIVITY] = (df_predictions[gc.columns.PRED_OTHER_ARM_ACTIVITY_PROBA] >= classification_threshold).astype(int)
 
+    # Set other arm activity boolean
     df_predictions.loc[df_predictions[gc.columns.ARM_LABEL]=='Gait without other behaviours or other positions', 'other_arm_activity_boolean'] = 0
     df_predictions.loc[df_predictions[gc.columns.ARM_LABEL]!='Gait without other behaviours or other positions', 'other_arm_activity_boolean'] = 1
     df_predictions.loc[df_predictions[gc.columns.ARM_LABEL]=='Holding an object behind ', gc.columns.ARM_LABEL] = 'Holding an object behind'
     df_predictions[gc.columns.ARM_LABEL] = df_predictions.loc[~df_predictions[gc.columns.ARM_LABEL].isna(), gc.columns.ARM_LABEL].apply(lambda x: mp.arm_labels_rename[x])
 
+    # Merge predictions with features
     df = pd.merge(
         left=df_predictions, 
         right=df_features, 
@@ -408,15 +416,16 @@ def generate_results_quantification(subject: str) -> tuple[dict, pd.DataFrame]:
 
     d_quantification = {}
 
+    # Compute unfiltered gait aggregations
     d_quantification['unfiltered_gait'] = compute_aggregations(df)
 
-    # filtered gait
-    d_quantification['filtered_gait'] = compute_aggregations(df.loc[df[gc.columns.PRED_OTHER_ARM_ACTIVITY]==0])
+    # Compute filtered gait aggregations
+    d_quantification['filtered_gait'] = compute_aggregations(df.loc[df[gc.columns.PRED_OTHER_ARM_ACTIVITY] == 0])
 
-    # no other arm activity (annotated)
+    # Compute annotated no other arm activity for specific participants
     if subject in gc.participant_ids.L_PD_IDS:
         df_diff = pd.DataFrame()
-        d_quantification['true_no_other_arm_activity'] = compute_aggregations(df.loc[df['other_arm_activity_boolean']==0])
+        d_quantification['true_no_other_arm_activity'] = compute_aggregations(df.loc[df['other_arm_activity_boolean'] == 0])
 
         es_mrom, diff_mrom = compute_effect_size(df, 'range_of_motion', 'median')
         es_prom, diff_prom = compute_effect_size(df, 'range_of_motion', '95')
@@ -447,5 +456,10 @@ def generate_results(subject, step):
         return d_output
 
     else:
-        d_output, df_diff = generate_results_quantification(subject)
-        return d_output, df_diff
+        # Only run generate_results_quantification if subject is in L_PD_IDS
+        if subject in gc.participant_ids.L_PD_IDS:
+            d_output, df_diff = generate_results_quantification(subject)
+            return d_output, df_diff
+
+        # Return None or an empty dictionary if the subject is not in L_PD_IDS
+        return None
