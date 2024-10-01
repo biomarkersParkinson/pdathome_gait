@@ -314,8 +314,12 @@ def compute_effect_size(df, parameter, stat):
                 std_bootstrap = np.std(bootstrapped_differences)
                     
                 # Store the computed values
+                if std_bootstrap == 0:
+                    d_effect_size[dataset][segment_category]['effect_size'] = np.nan  # or another sentinel value
+                else:
+                    d_effect_size[dataset][segment_category]['effect_size'] = (mu_post - mu_pre) / std_bootstrap
+
                 d_effect_size[dataset][segment_category]['std'] = std_bootstrap
-                d_effect_size[dataset][segment_category]['effect_size'] = (mu_post - mu_pre) / std_bootstrap
 
                 if segment_category == 'overall':
                     d_diffs[dataset] = bootstrapped_differences
