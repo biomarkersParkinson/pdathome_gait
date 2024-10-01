@@ -96,6 +96,61 @@ def plot_significance(ax, x_min, x_max, pvalue, y_min_significance, gap, row, te
     ax.text((x_max + x_min)/2, text_height, asterisks, ha='center', va='bottom', c=color, size=text_size)
 
 
+def hue_rule(df1, df2, hue=None):
+    if hue is None:
+        return None 
+    if hue not in df1.columns or hue not in df2.columns:
+        raise ValueError(f"The 'hue' variable '{hue}' is not present in both DataFrames.")
+
+    # Filter only the rows where the 'hue' values are identical in both DataFrames
+    common_values = df1[df1[hue].eq(df2[hue])][hue].unique()
+
+    # Create a dictionary that assigns each unique value in 'hue' a color
+    color_dict = {val: sns.color_palette("colorblind")[i] for i, val in enumerate(common_values)}
+
+    # Map 'hue' values to colors using the dictionary
+    colors = df1[hue].map(color_dict)
+
+    return colors
+
+
+def bland_altman_plot(df1, df2, *args, x=None, axs=None, hue='population', reference=None, confidence_interval=1.96, **kwargs):
+    if axs is None:
+        axs = plt.axes()
+
+    data1     = df1[x]
+    data2     = df2[x]
+    data1     = np.asarray(data1)
+    data2     = np.asarray(data2)
+    mean      = np.mean([data1, data2], axis=0)
+    diff      = data1 - data2                   # Difference between data1 and data2
+    md        = np.mean(diff)                   # Mean of the difference
+    sd        = np.std(diff, axis=0)            # Standard deviation of the difference
+    CI_low    = md - confidence_interval*sd
+    CI_high   = md + confidence_interval*sd
+
+    colors = hue_rule(df1, df2, hue=hue)
+    
+    if reference is None:
+        sns.scatterplot(x=mean, y=diff, hue=df1[hue], *args, **kwargs)
+    else:
+        sns.scatterplot(x=reference, y=diff, hue=df1[hue], *args, **kwargs)
+
+    axs.axhline(md, color='black', linestyle='-')
+    axs.axhline(md + confidence_interval*sd, color='gray', linestyle='--')
+    axs.axhline(md - confidence_interval*sd, color='gray', linestyle='--')
+
+    xOutPlot = np.min(mean) + (np.max(mean)-np.min(mean))*1.34
+
+    axs.text(xOutPlot, md - confidence_interval*sd, r'-'+str(confidence_interval)+' SD:' + "\n" + "%.2f" % CI_low, ha = "center", va = "center")
+    axs.text(xOutPlot, md + confidence_interval*sd, r'+'+str(confidence_interval)+' SD:' + "\n" + "%.2f" % CI_high, ha = "center", va = "center")
+    axs.text(xOutPlot, md, r'Mean:' + "\n" + "%.2f" % md, ha = "center", va = "center")
+
+    axs.set_ylim(md - 3.5*sd, md + 3.5*sd)
+    
+    return axs, colors
+
+
 def generate_clinical_scores(l_ids):
     df_patient_info = pd.read_pickle(os.path.join(gc.paths.PATH_CLINICAL_DATA, 'df_patient_info_updrs_3.pkl'))
     df_patient_info = df_patient_info.loc[df_patient_info['record_id'].isin(gc.participant_ids.L_PD_IDS)].reset_index(drop=True)
@@ -198,6 +253,7 @@ def generate_results_classification(step, subject, segment_gap_s):
             
         # make segments and segment duration categories
         for affected_side in [gc.descriptives.MOST_AFFECTED_SIDE, gc.descriptives.LEAST_AFFECTED_SIDE]:
+            d_performance[model][affected_side] = {}
             df_side = df_predictions.loc[df_predictions[gc.columns.SIDE]==affected_side]
 
             # if subject in gc.participant_ids.L_TREMOR_IDS:
@@ -216,16 +272,8 @@ def generate_results_classification(step, subject, segment_gap_s):
             #     df_ts.loc[df_ts[gc.columns.ARM_LABEL]=='Holding an object behind ', gc.columns.ARM_LABEL] = 'Holding an object behind'
             #     df_ts[gc.columns.ARM_LABEL] = df_ts.loc[~df_ts[gc.columns.ARM_LABEL].isna(), gc.columns.ARM_LABEL].apply(lambda x: mp.arm_labels_rename[x])
 
-            fpr, tpr, _ = roc_curve(y_true=np.array(df_side['label_boolean']), y_score=np.array(df_side[pred_proba_colname]), pos_label=1)
-            roc = auc(fpr, tpr)
-
-            d_performance[model][affected_side] = {
-                'sens': calculate_sens(df=df_side, pred_colname=pred_colname, true_colname='label_boolean'),
-                'spec': calculate_spec(df=df_side, pred_colname=pred_colname, true_colname='label_boolean'),
-                'auc': roc
-            }
-
-            l_raw_cols = [gc.columns.TIME, gc.columns.FREE_LIVING_LABEL]
+            l_raw_cols = [gc.columns.TIME, gc.columns.FREE_LIVING_LABEL, 
+                          gc.columns.TRUE_GAIT_SEGMENT_NR, gc.columns.TRUE_GAIT_SEGMENT_CAT]
             l_merge_cols = [gc.columns.TIME]
             if gc.columns.PRE_OR_POST in df_side.columns and subject in gc.participant_ids.L_PD_IDS:
                 l_raw_cols.append(gc.columns.PRE_OR_POST)
@@ -234,55 +282,67 @@ def generate_results_classification(step, subject, segment_gap_s):
                 l_merge_cols.append(gc.columns.FREE_LIVING_LABEL)
 
             df_raw = pd.read_pickle(os.path.join(gc.paths.PATH_PREPARED_DATA, f'{subject}_{affected_side}.pkl'))
+
+            df_raw[gc.columns.TRUE_GAIT_SEGMENT_NR] = create_segments(
+                df=df_raw,
+                time_column_name=gc.columns.TIME,
+                gap_threshold_s=segment_gap_s
+            )
+
+            df_raw[gc.columns.TRUE_GAIT_SEGMENT_CAT] = categorize_segments(
+                df=df_raw,
+                segment_nr_colname=gc.columns.TRUE_GAIT_SEGMENT_NR,
+                sampling_frequency=gc.parameters.DOWNSAMPLED_FREQUENCY,
+            )
+
             if subject in gc.participant_ids.L_PD_IDS:
                 df_side = pd.merge(left=df_side, right=df_raw[l_raw_cols], how='left', on=l_merge_cols)
             else:
                 df_side = pd.merge(left=df_side, right=df_raw[l_raw_cols], how='left', on=l_merge_cols)
 
+            df_prevalence_correction = pd.DataFrame()
             for med_stage in df_side[gc.columns.PRE_OR_POST].unique():
                 df_med_stage = df_side.loc[df_side[gc.columns.PRE_OR_POST]==med_stage].copy()
 
                 fpr, tpr, _ = roc_curve(y_true=np.array(df_med_stage['label_boolean']), y_score=np.array(df_med_stage[pred_proba_colname]), pos_label=1)
                 roc = auc(fpr, tpr)
 
+                seconds_true = df_med_stage.loc[df_med_stage['label_boolean']==1].shape[0] / gc.parameters.DOWNSAMPLED_FREQUENCY
+                seconds_false = df_med_stage.loc[df_med_stage['label_boolean']==0].shape[0] / gc.parameters.DOWNSAMPLED_FREQUENCY
+
                 d_performance[model][affected_side][med_stage] = {
                     'sens': calculate_sens(df=df_med_stage, pred_colname=pred_colname, true_colname='label_boolean'),
                     'spec': calculate_spec(df=df_med_stage, pred_colname=pred_colname, true_colname='label_boolean'),
                     'auc': roc,
                     'size': {
-                        'gait_s': df_med_stage.loc[df_med_stage['label_boolean']==1].shape[0] / gc.parameters.DOWNSAMPLED_FREQUENCY,
-                        'non_gait_s': df_med_stage.loc[df_med_stage['label_boolean']==0].shape[0] / gc.parameters.DOWNSAMPLED_FREQUENCY,
+                        f'{step}_s': seconds_true,
+                        f'non_{step}_s': seconds_false,
                     }
                 }
 
-                df_gait = df_med_stage.loc[df_med_stage[gc.columns.FREE_LIVING_LABEL]=='Walking'].copy()
-
-                # df, time_column_name, gap_threshold
-
-                df_gait[gc.columns.SEGMENT_NR] = create_segments(
-                    df=df_gait,
-                    time_column_name=gc.columns.TIME,
-                    gap_threshold_s=segment_gap_s
-                )
-
-                df_gait[gc.columns.SEGMENT_CAT] = categorize_segments(
-                    df=df_gait,
-                    segment_nr_colname=gc.columns.SEGMENT_NR,
-                    sampling_frequency=gc.parameters.DOWNSAMPLED_FREQUENCY,
-                )
-
-                df_gait[gc.columns.SEGMENT_CAT] = df_gait[gc.columns.SEGMENT_CAT].apply(lambda x: mp.segment_map[x])
+                df_med_stage[gc.columns.TRUE_GAIT_SEGMENT_CAT] = df_med_stage[gc.columns.TRUE_GAIT_SEGMENT_CAT].apply(lambda x: mp.segment_map[x])
 
                 # minutes of data per med stage, per affected side, per segment duration category
                 d_performance[model][affected_side][med_stage]['segment_duration'] = {}
-                for segment_duration in df_gait[gc.columns.SEGMENT_CAT].unique():
-                    df_segments_cat = df_gait.loc[df_gait[gc.columns.SEGMENT_CAT]==segment_duration]
+                for segment_duration in df_med_stage[gc.columns.TRUE_GAIT_SEGMENT_CAT].unique():
+                    df_segments_cat = df_med_stage.loc[df_med_stage[gc.columns.TRUE_GAIT_SEGMENT_CAT]==segment_duration]
+
+                    cat_minutes = df_segments_cat.loc[df_segments_cat[pred_colname]==0].shape[0]/gc.parameters.DOWNSAMPLED_FREQUENCY/60
+                    sens = calculate_sens(df=df_segments_cat, pred_colname=pred_colname, true_colname='label_boolean')
+                    spec = calculate_spec(df=df_segments_cat, pred_colname=pred_colname, true_colname='label_boolean')
 
                     d_performance[model][affected_side][med_stage]['segment_duration'][segment_duration] = {
-                        'sens': calculate_sens(df=df_segments_cat, pred_colname=pred_colname, true_colname='label_boolean'),
+                        'sens': sens,
+                        'spec': spec,
+                        'minutes': cat_minutes
                     }
 
-                    d_performance[model][affected_side][med_stage]['segment_duration'][segment_duration]['minutes'] = df_segments_cat.shape[0]/gc.parameters.DOWNSAMPLED_FREQUENCY/60
+                    df_prevalence_correction = pd.concat(
+                        [
+                            df_prevalence_correction, 
+                            pd.DataFrame([cat_minutes, spec, segment_duration, med_stage], index=['minutes', 'spec', 'segment_duration', 'pre_or_post']).T
+                        ]
+                    ).reset_index(drop=True)
 
                     if subject in gc.participant_ids.L_PD_IDS:
                         d_performance[model][affected_side][med_stage]['segment_duration'][segment_duration]['arm_activities'] = {}
@@ -333,7 +393,21 @@ def generate_results_classification(step, subject, segment_gap_s):
 
                 #     for tremor_type in [x for x in df_tremor['tremor_label_binned'].unique() if not pd.isna(x)]:
                 #         d_performance[model][affected_side][med_stage][f'{tremor_type}_spec'] = calculate_spec(df=df_tremor.loc[df_tremor['tremor_label_binned']==tremor_type], pred_colname=pred_colname, true_colname='label_boolean')
-                        
+
+            # correct for segment duration differences
+            df_prev_overall = (df_prevalence_correction.groupby('segment_duration')['minutes'].sum() / df_prevalence_correction['minutes'].sum()).reset_index(name='prop_overall')
+            df_prev_specific = (df_prevalence_correction.groupby(['pre_or_post', 'segment_duration'])['minutes'].sum() / df_prevalence_correction.groupby('pre_or_post')['minutes'].sum()).reset_index(name='prop_specific')
+
+            df_prevalence_correction = pd.merge(left=df_prevalence_correction, right=df_prev_specific, how='left', on=['pre_or_post', 'segment_duration'])
+            df_prevalence_correction = pd.merge(left=df_prevalence_correction, right=df_prev_overall, how='left', on=['segment_duration'])            
+
+            for med_stage in df_side[gc.columns.PRE_OR_POST].unique():
+                spec_corrected_1 = df_prevalence_correction.loc[df_prevalence_correction['pre_or_post']==med_stage, 'spec'] * df_prevalence_correction.loc[df_prevalence_correction['pre_or_post']==med_stage, 'prop_specific'] / df_prevalence_correction.loc[df_prevalence_correction['pre_or_post']==med_stage, 'prop_overall']
+                spec_corrected_2 = np.sum(np.multiply(df_prevalence_correction.loc[df_prevalence_correction['pre_or_post']==med_stage, 'spec'], df_prevalence_correction.loc[df_prevalence_correction['pre_or_post']==med_stage, 'prop_overall']))
+                
+                d_performance[model][affected_side][med_stage]['spec_corrected_1'] = spec_corrected_1
+                d_performance[model][affected_side][med_stage]['spec_corrected_2'] = spec_corrected_2
+    
     return d_performance
 
 
