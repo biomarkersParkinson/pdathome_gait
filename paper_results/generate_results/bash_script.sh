@@ -13,7 +13,7 @@ module load Python/3.11.3-GCCcore-12.3.0
 source $(poetry env info --path)/bin/activate
 
 #Run same program over many different inputs
-nproc=10
+nproc=2
 input_ids=$(cat ../../id_files/all.txt)
 
 python -u generate_results.py $nproc $input_ids

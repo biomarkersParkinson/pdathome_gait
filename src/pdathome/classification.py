@@ -177,7 +177,10 @@ def windows_to_timestamps(subject, df, path_output, pred_proba_colname, step):
         raise ValueError("Step not recognized")
 
     # Define base gc.columns
-    l_subj_cols = [gc.columns.SIDE, gc.columns.WINDOW_NR, pred_proba_colname]
+    l_subj_cols = [
+        gc.columns.SIDE, gc.columns.WINDOW_NR, gc.columns.PRED_GAIT_SEGMENT_NR,
+        gc.columns.PRED_GAIT_SEGMENT_CAT, pred_proba_colname
+    ]
     l_merge_ts_cols = [gc.columns.WINDOW_NR, gc.columns.SIDE, gc.columns.PRED_GAIT_SEGMENT_NR]
     l_merge_points_cols = [gc.columns.TIME, gc.columns.SIDE]
     l_groupby_cols = [gc.columns.TIME, gc.columns.SIDE]
@@ -213,6 +216,9 @@ def windows_to_timestamps(subject, df, path_output, pred_proba_colname, step):
     df_ts_mas = pd.read_pickle(os.path.join(path_features, f'{subject}_{gc.descriptives.MOST_AFFECTED_SIDE}_ts.pkl')).assign(side=gc.descriptives.MOST_AFFECTED_SIDE)
     df_ts_las = pd.read_pickle(os.path.join(path_features, f'{subject}_{gc.descriptives.LEAST_AFFECTED_SIDE}_ts.pkl')).assign(side=gc.descriptives.LEAST_AFFECTED_SIDE)
 
+    df_ts_mas = df_ts_mas.reset_index(drop=True)
+    df_ts_las = df_ts_las.reset_index(drop=True)
+
     df_ts = pd.concat([df_ts_mas, df_ts_las], ignore_index=True)
 
     # Explode timestamp data for merging
@@ -225,10 +231,7 @@ def windows_to_timestamps(subject, df, path_output, pred_proba_colname, step):
     df_single_points.reset_index(drop=True, inplace=True)
 
     # Group by relevant gc.columns and calculate mean prediction probability
-    if step == 'gait':
-        df_pred_per_point = df_single_points.groupby(l_groupby_cols)[pred_proba_colname].mean().reset_index()
-    else:
-        df_pred_per_point = df_single_points.groupby(l_groupby_cols)[pred_proba_colname].mean().reset_index()
+    df_pred_per_point = df_single_points.groupby(l_groupby_cols)[pred_proba_colname].mean().reset_index()
 
     # Save the final result
     if not os.path.exists(path_output):
@@ -242,6 +245,9 @@ def windows_to_timestamps(subject, df, path_output, pred_proba_colname, step):
 
 
 def store_model_output(df, classifier_name, step, n_jobs=-1):
+    print()
+    print(f"Storing model output at {step} step for classifier {classifier_name} ...")
+
     if step not in ['gait', 'arm_activity']:
         raise ValueError("Step not recognized")
     
@@ -340,8 +346,6 @@ def store_model_output(df, classifier_name, step, n_jobs=-1):
     if step == 'arm_activity':       
         # Predict arm activity for the controls
         predict_controls(clf, scaler, classifier_name, l_predictors, l_predictors_scaled, step)
-
-    
 
 
 def predict_controls(clf, scaler, classifier_name, l_predictors, l_predictors_scaled, step):

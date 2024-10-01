@@ -47,8 +47,8 @@ if __name__ == '__main__':
     l_ids = sys.argv[3:]      # List of ids to process
 
     # Choose which classifiers to run
-    gd_classifiers = [gc.classifiers.GAIT_DETECTION_CLASSIFIER_SELECTED]
-    fg_classifiers = [gc.classifiers.ARM_ACTIVITY_CLASSIFIER_SELECTED]
+    gd_classifiers = [gc.classifiers.LOGISTIC_REGRESSION, gc.classifiers.RANDOM_FOREST]
+    fg_classifiers = [gc.classifiers.LOGISTIC_REGRESSION, gc.classifiers.RANDOM_FOREST]
 
     # No need for nested parallelization
     n_jobs = 1
