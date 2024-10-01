@@ -335,7 +335,17 @@ def generate_results_classification(step, subject, segment_gap_s):
     return d_performance
 
 
-def generate_results_quantification(subject):
+def load_arm_activity_data(subject: str, side: str) -> pd.DataFrame:
+    """Load arm activity features for a given subject and side."""
+    df_features = pd.read_pickle(os.path.join(gc.paths.PATH_ARM_ACTIVITY_FEATURES, f'{subject}_{side}.pkl'))
+    df_features[gc.columns.SIDE] = side
+    return df_features
+
+
+def generate_results_quantification(subject: str) -> tuple[dict, pd.DataFrame]:
+    """Generate quantification results for a given subject."""
+    classification_threshold = 0.5
+
     # arm activity features
     df_features_mas = pd.read_pickle(os.path.join(gc.paths.PATH_ARM_ACTIVITY_FEATURES, f'{subject}_mas.pkl'))
     df_features_mas[gc.columns.SIDE] = gc.descriptives.MOST_AFFECTED_SIDE
@@ -379,7 +389,7 @@ def generate_results_quantification(subject):
     df_predictions = pd.read_pickle(os.path.join(gc.paths.PATH_ARM_ACTIVITY_PREDICTIONS, gc.classifiers.LOGISTIC_REGRESSION, f'{subject}.pkl'))
 
     # set pred rounded
-    df_predictions[gc.columns.PRED_OTHER_ARM_ACTIVITY] = (df_predictions[gc.columns.PRED_OTHER_ARM_ACTIVITY_PROBA] >= 0.5).astype(int)
+    df_predictions[gc.columns.PRED_OTHER_ARM_ACTIVITY] = (df_predictions[gc.columns.PRED_OTHER_ARM_ACTIVITY_PROBA] >= classification_threshold).astype(int)
 
     df_predictions.loc[df_predictions[gc.columns.ARM_LABEL]=='Gait without other behaviours or other positions', 'other_arm_activity_boolean'] = 0
     df_predictions.loc[df_predictions[gc.columns.ARM_LABEL]!='Gait without other behaviours or other positions', 'other_arm_activity_boolean'] = 1
