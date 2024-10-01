@@ -463,11 +463,11 @@ def generate_results(subject, step):
             segment_gap_s=1.5
         )
 
-        step_filename = f'{subject}_{step}.json'
-        with open(os.path.join(gc.paths.PATH_OUTPUT, 'classification_performance', step, step_filename), 'w') as f:
-            json.dump(d_output, f, indent=4)
+        json_filename = f'{subject}.json'
 
-        return
+        with open(os.path.join(gc.paths.PATH_OUTPUT, 'classification_performance', step, json_filename), 'w') as f:
+                json.dump(d_output, f, indent=4)
+        return 
 
     else:
         # Only run generate_results_quantification if subject is in L_PD_IDS
@@ -475,8 +475,9 @@ def generate_results(subject, step):
             print(f"Processing {subject} - {step}...")
             d_output, df_diff = generate_results_quantification(subject)
 
-            json_filename = f'{subject}_{step}.json'
-            pkl_filename = f'{subject}_{step}.pkl'
+            json_filename = f'{subject}.json'
+            pkl_filename = f'{subject}.pkl'
+
             with open(os.path.join(gc.paths.PATH_OUTPUT, 'quantification', json_filename), 'w') as f:
                 json.dump(d_output, f, indent=4)
 
