@@ -177,7 +177,10 @@ def windows_to_timestamps(subject, df, path_output, pred_proba_colname, step):
         raise ValueError("Step not recognized")
 
     # Define base gc.columns
-    l_subj_cols = [gc.columns.SIDE, gc.columns.WINDOW_NR, pred_proba_colname]
+    l_subj_cols = [
+        gc.columns.SIDE, gc.columns.WINDOW_NR, gc.columns.PRED_GAIT_SEGMENT_NR,
+        gc.columns.PRED_GAIT_SEGMENT_CAT, pred_proba_colname
+    ]
     l_merge_ts_cols = [gc.columns.WINDOW_NR, gc.columns.SIDE, gc.columns.PRED_GAIT_SEGMENT_NR]
     l_merge_points_cols = [gc.columns.TIME, gc.columns.SIDE]
     l_groupby_cols = [gc.columns.TIME, gc.columns.SIDE]
@@ -228,10 +231,7 @@ def windows_to_timestamps(subject, df, path_output, pred_proba_colname, step):
     df_single_points.reset_index(drop=True, inplace=True)
 
     # Group by relevant gc.columns and calculate mean prediction probability
-    if step == 'gait':
-        df_pred_per_point = df_single_points.groupby(l_groupby_cols)[pred_proba_colname].mean().reset_index()
-    else:
-        df_pred_per_point = df_single_points.groupby(l_groupby_cols)[pred_proba_colname].mean().reset_index()
+    df_pred_per_point = df_single_points.groupby(l_groupby_cols)[pred_proba_colname].mean().reset_index()
 
     # Save the final result
     if not os.path.exists(path_output):
