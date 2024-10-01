@@ -154,7 +154,7 @@ def generate_results_classification(step, subject, segment_gap_s):
             label_colname = gc.columns.FREE_LIVING_LABEL
 
             # Values
-            true_value_label = 'Walking'
+            value_label = 'Walking'
 
             # Classification threshold
             with open(os.path.join(gc.paths.PATH_THRESHOLDS, step, f'{model}.txt'), 'r') as f:
@@ -170,7 +170,7 @@ def generate_results_classification(step, subject, segment_gap_s):
             label_colname = gc.columns.ARM_LABEL
 
             # Values
-            true_value_label = 'Gait without other behaviours or other positions'
+            value_label = 'Gait without other behaviours or other positions'
 
             # Classification threshold
             clf_threshold = 0.5
@@ -183,10 +183,13 @@ def generate_results_classification(step, subject, segment_gap_s):
         df_predictions.loc[df_predictions[pred_proba_colname]<clf_threshold, pred_colname] = 0
 
         # boolean for label (ground truth)
-        df_predictions.loc[df_predictions[label_colname]!=true_value_label, 'label_boolean'] = 1
-        df_predictions.loc[df_predictions[label_colname]==true_value_label, 'label_boolean'] = 0
+        if step == 'gait':
+            df_predictions.loc[df_predictions[label_colname]==value_label, 'label_boolean'] = 1
+            df_predictions.loc[df_predictions[label_colname]!=value_label, 'label_boolean'] = 0
+        elif step == 'arm_activity':
+            df_predictions.loc[df_predictions[label_colname]!=value_label, 'label_boolean'] = 1
+            df_predictions.loc[df_predictions[label_colname]==value_label, 'label_boolean'] = 0
 
-        
         if subject in gc.participant_ids.L_PD_IDS:
             df_predictions.loc[df_predictions[gc.columns.ARM_LABEL]=='Holding an object behind ', gc.columns.ARM_LABEL] = 'Holding an object behind'
             df_predictions[gc.columns.ARM_LABEL] = df_predictions.loc[~df_predictions[gc.columns.ARM_LABEL].isna(), gc.columns.ARM_LABEL].apply(lambda x: mp.arm_labels_rename[x])
@@ -450,6 +453,8 @@ def generate_results(subject, step):
 
     if subject in gc.participant_ids.L_HC_IDS and step == 'arm_activity':
         return None
+
+    print(f"Processing {subject} - {step}...")
     
     if step in ['gait', 'arm_activity']:
         d_output =  generate_results_classification(
