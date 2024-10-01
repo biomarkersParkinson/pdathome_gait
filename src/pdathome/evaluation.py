@@ -442,6 +442,7 @@ def generate_results_quantification(subject: str) -> tuple[dict, pd.DataFrame]:
         for dataset in diff_mrom.keys():
             df_diff = pd.concat([df_diff, pd.DataFrame([subject, dataset, diff_mrom[dataset], diff_prom[dataset]]).T])
 
+        df_diff.columns = ['id', 'dataset', 'diff_median_rom', 'diff_95p_rom']
         return d_quantification, df_diff
     else:
         return d_quantification
