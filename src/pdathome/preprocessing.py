@@ -216,9 +216,16 @@ def preprocess_filtering_gait(subject):
 
         # Configure gc.columns based on cohort
         if subject in gc.participant_ids.L_PD_IDS:
-            l_cols_to_export = [gc.columns.TIME, gc.columns.TRUE_GAIT_SEGMENT_NR, gc.columns.PRED_GAIT_SEGMENT_NR, gc.columns.WINDOW_NR, gc.columns.ARM_LABEL, gc.columns.PRE_OR_POST]
+            l_cols_to_export = [
+                gc.columns.TIME, gc.columns.TRUE_GAIT_SEGMENT_NR, gc.columns.TRUE_GAIT_SEGMENT_CAT,
+                gc.columns.PRED_GAIT_SEGMENT_NR, gc.columns.WINDOW_NR, gc.columns.FREE_LIVING_LABEL,
+                gc.columns.ARM_LABEL, gc.columns.PRE_OR_POST
+            ]
         else:
-            l_cols_to_export = [gc.columns.TIME, gc.columns.TRUE_GAIT_SEGMENT_NR, gc.columns.PRED_GAIT_SEGMENT_NR, gc.columns.WINDOW_NR]
+            l_cols_to_export = [
+                gc.columns.TIME, gc.columns.TRUE_GAIT_SEGMENT_NR, gc.columns.TRUE_GAIT_SEGMENT_CAT,
+                gc.columns.PRED_GAIT_SEGMENT_NR, gc.columns.WINDOW_NR, gc.columns.FREE_LIVING_LABEL
+            ]
 
         # Load sensor data
         df_sensors = pd.read_pickle(os.path.join(gc.paths.PATH_PREPARED_DATA, f'{subject}_{side}.pkl'))
@@ -296,11 +303,18 @@ def preprocess_filtering_gait(subject):
         walking_segments = create_segments(
             df=df.loc[df[gc.columns.FREE_LIVING_LABEL] == 'Walking'],
             time_column_name=gc.columns.TIME,
-            gap_threshold_s=arm_activity_config.window_length_s
+            gap_threshold_s=gc.parameters.SEGMENT_GAP_GAIT
         )
 
         # Assign the result back to the TRUE_GAIT_SEGMENT_NR column for the relevant rows
         df.loc[df[gc.columns.FREE_LIVING_LABEL] == 'Walking', gc.columns.TRUE_GAIT_SEGMENT_NR] = walking_segments
+
+        # Map categories to segments of true gait
+        df.loc[df[gc.columns.FREE_LIVING_LABEL] == 'Walking', gc.columns.TRUE_GAIT_SEGMENT_CAT] = categorize_segments(
+            df=df.loc[df[gc.columns.FREE_LIVING_LABEL] == 'Walking'],
+            segment_nr_colname=gc.columns.TRUE_GAIT_SEGMENT_NR,
+            sampling_frequency=arm_activity_config.sampling_frequency
+        )
         
         # Use only predicted gait for the subsequent steps
         df = df[df[gc.columns.PRED_GAIT] == 1].reset_index(drop=True)
@@ -312,6 +326,13 @@ def preprocess_filtering_gait(subject):
             gap_threshold_s=gc.parameters.SEGMENT_GAP_GAIT
         )
 
+        # Map categories to segments of predicted gait
+        df[gc.columns.PRED_GAIT_SEGMENT_CAT] = categorize_segments(
+            df=df,
+            segment_nr_colname=gc.columns.PRED_GAIT_SEGMENT_NR,
+            sampling_frequency=arm_activity_config.sampling_frequency
+        )
+
         # Remove any segments that do not adhere to predetermined criteria
         df = discard_segments(
             df=df,
@@ -321,11 +342,17 @@ def preprocess_filtering_gait(subject):
         )
 
         # Create windows of fixed length and step size from the time series
-        arm_activity_config.l_data_point_level_cols.append(gc.columns.TRUE_GAIT_SEGMENT_NR)
-        l_single_value_cols = [gc.columns.PRED_GAIT_SEGMENT_NR]
+        arm_activity_config.l_data_point_level_cols += [
+            gc.columns.FREE_LIVING_LABEL, gc.columns.TRUE_GAIT_SEGMENT_NR, gc.columns.TRUE_GAIT_SEGMENT_CAT
+        ]
+        l_single_value_cols = [gc.columns.PRED_GAIT_SEGMENT_NR, gc.columns.PRED_GAIT_SEGMENT_CAT]
         if subject in gc.participant_ids.L_PD_IDS:
             l_single_value_cols.append(gc.columns.PRE_OR_POST)
             arm_activity_config.l_data_point_level_cols.append(gc.columns.ARM_LABEL)
+
+        if 'angle_smooth' in arm_activity_config.l_data_point_level_cols:
+            i_angle = arm_activity_config.l_data_point_level_cols.index('angle_smooth')
+            arm_activity_config.l_data_point_level_cols[i_angle] = 'angle'
 
         l_dfs = [
             tabulate_windows(
@@ -429,8 +456,8 @@ def preprocess_filtering_gait(subject):
         df_windowed[gc.columns.SIDE] = side
 
         l_export_cols = [
-            gc.columns.TIME, gc.columns.WINDOW_NR, gc.columns.PRED_GAIT_SEGMENT_NR, gc.columns.PRED_GAIT_SEGMENT_CAT,
-            gc.columns.TRUE_GAIT_SEGMENT_NR, gc.columns.TRUE_GAIT_SEGMENT_CAT] + list(arm_activity_config.d_channels_values.keys())
+            gc.columns.TIME, gc.columns.WINDOW_NR, gc.columns.PRED_GAIT_SEGMENT_NR, gc.columns.PRED_GAIT_SEGMENT_CAT
+        ] + list(arm_activity_config.d_channels_values.keys())
 
         if subject in gc.participant_ids.L_PD_IDS:
             l_export_cols += [gc.columns.PRE_OR_POST, gc.columns.ARM_LABEL_MAJORITY_VOTING, gc.columns.OTHER_ARM_ACTIVITY_MAJORITY_VOTING]

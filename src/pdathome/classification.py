@@ -213,6 +213,9 @@ def windows_to_timestamps(subject, df, path_output, pred_proba_colname, step):
     df_ts_mas = pd.read_pickle(os.path.join(path_features, f'{subject}_{gc.descriptives.MOST_AFFECTED_SIDE}_ts.pkl')).assign(side=gc.descriptives.MOST_AFFECTED_SIDE)
     df_ts_las = pd.read_pickle(os.path.join(path_features, f'{subject}_{gc.descriptives.LEAST_AFFECTED_SIDE}_ts.pkl')).assign(side=gc.descriptives.LEAST_AFFECTED_SIDE)
 
+    df_ts_mas = df_ts_mas.reset_index(drop=True)
+    df_ts_las = df_ts_las.reset_index(drop=True)
+
     df_ts = pd.concat([df_ts_mas, df_ts_las], ignore_index=True)
 
     # Explode timestamp data for merging
@@ -242,6 +245,9 @@ def windows_to_timestamps(subject, df, path_output, pred_proba_colname, step):
 
 
 def store_model_output(df, classifier_name, step, n_jobs=-1):
+    print()
+    print(f"Storing model output at {step} step for classifier {classifier_name} ...")
+
     if step not in ['gait', 'arm_activity']:
         raise ValueError("Step not recognized")
     
@@ -340,8 +346,6 @@ def store_model_output(df, classifier_name, step, n_jobs=-1):
     if step == 'arm_activity':       
         # Predict arm activity for the controls
         predict_controls(clf, scaler, classifier_name, l_predictors, l_predictors_scaled, step)
-
-    
 
 
 def predict_controls(clf, scaler, classifier_name, l_predictors, l_predictors_scaled, step):

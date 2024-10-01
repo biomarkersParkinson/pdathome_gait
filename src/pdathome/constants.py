@@ -89,7 +89,7 @@ class Columns:
     TRUE_GAIT_SEGMENT_NR: str = 'true_gait_segment_nr'
     PRED_GAIT_SEGMENT_NR: str = 'pred_gait_segment_nr'
     TRUE_GAIT_SEGMENT_CAT: str = 'true_gait_segment_cat'
-    PRED_GAIT_SEGMENT_CAT: str = 'true_gait_segment_cat'
+    PRED_GAIT_SEGMENT_CAT: str = 'pred_gait_segment_cat'
     L_ACCELEROMETER: List[str] = field(default_factory=lambda: [
         DataColumns.ACCELEROMETER_X, DataColumns.ACCELEROMETER_Y, DataColumns.ACCELEROMETER_Z
     ])
