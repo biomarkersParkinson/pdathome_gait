@@ -178,10 +178,10 @@ def windows_to_timestamps(subject, df, path_output, pred_proba_colname, step):
 
     # Define base gc.columns
     l_subj_cols = [gc.columns.SIDE, gc.columns.WINDOW_NR, pred_proba_colname]
-    l_merge_ts_cols = [gc.columns.WINDOW_NR, gc.columns.SIDE]
+    l_merge_ts_cols = [gc.columns.WINDOW_NR, gc.columns.SIDE, gc.columns.PRED_GAIT_SEGMENT_NR]
     l_merge_points_cols = [gc.columns.TIME, gc.columns.SIDE]
     l_groupby_cols = [gc.columns.TIME, gc.columns.SIDE]
-    l_explode_cols = [gc.columns.TIME]
+    l_explode_cols = [gc.columns.TIME, gc.columns.FREE_LIVING_LABEL]
     l_dupl_cols = [gc.columns.TIME, gc.columns.SIDE]
 
     # Add PD-specific gc.columns
@@ -197,12 +197,12 @@ def windows_to_timestamps(subject, df, path_output, pred_proba_colname, step):
     if step == 'gait':
         l_subj_cols += [gc.columns.GAIT_MAJORITY_VOTING, gc.columns.ACTIVITY_LABEL_MAJORITY_VOTING]
         path_features = gc.paths.PATH_GAIT_FEATURES
-        l_explode_cols += [gc.columns.FREE_LIVING_LABEL, gc.columns.TRUE_GAIT_SEGMENT_NR]
+        l_explode_cols += [gc.columns.TRUE_GAIT_SEGMENT_NR]
         l_groupby_cols.append(gc.columns.FREE_LIVING_LABEL)
     elif step == 'arm_activity':
         path_features = gc.paths.PATH_ARM_ACTIVITY_FEATURES
-        l_explode_cols.append(gc.columns.TRUE_GAIT_SEGMENT_NR)
-        l_groupby_cols.append(gc.columns.PRED_GAIT_SEGMENT_NR)
+        l_explode_cols += [gc.columns.TRUE_GAIT_SEGMENT_NR, gc.columns.TRUE_GAIT_SEGMENT_CAT]
+        l_groupby_cols += [gc.columns.PRED_GAIT_SEGMENT_NR, gc.columns.PRED_GAIT_SEGMENT_CAT]
         if subject in gc.participant_ids.L_PD_IDS:
             l_subj_cols += [gc.columns.OTHER_ARM_ACTIVITY_MAJORITY_VOTING, gc.columns.ARM_LABEL_MAJORITY_VOTING]
 
