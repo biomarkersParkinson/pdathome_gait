@@ -186,14 +186,13 @@ def generate_results_classification(step, subject, segment_gap_s):
         df_predictions.loc[df_predictions[label_colname]!=true_value_label, 'label_boolean'] = 1
         df_predictions.loc[df_predictions[label_colname]==true_value_label, 'label_boolean'] = 0
 
-        if subject in gc.participant_ids.L_HC_IDS:
-            df_predictions[gc.columns.PRE_OR_POST] = gc.descriptives.CONTROLS
-        else:
+        
+        if subject in gc.participant_ids.L_PD_IDS:
             df_predictions.loc[df_predictions[gc.columns.ARM_LABEL]=='Holding an object behind ', gc.columns.ARM_LABEL] = 'Holding an object behind'
             df_predictions[gc.columns.ARM_LABEL] = df_predictions.loc[~df_predictions[gc.columns.ARM_LABEL].isna(), gc.columns.ARM_LABEL].apply(lambda x: mp.arm_labels_rename[x])
-
-        # PROCESS DATA
-
+        else:
+            df_predictions[gc.columns.PRE_OR_POST] = gc.descriptives.CONTROLS
+            
         # make segments and segment duration categories
         for affected_side in [gc.descriptives.MOST_AFFECTED_SIDE, gc.descriptives.LEAST_AFFECTED_SIDE]:
             df_side = df_predictions.loc[df_predictions[gc.columns.SIDE]==affected_side]
@@ -225,7 +224,7 @@ def generate_results_classification(step, subject, segment_gap_s):
 
             l_raw_cols = [gc.columns.TIME, gc.columns.FREE_LIVING_LABEL]
             l_merge_cols = [gc.columns.TIME]
-            if gc.columns.PRE_OR_POST in df_side.columns:
+            if gc.columns.PRE_OR_POST in df_side.columns and subject in gc.participant_ids.L_PD_IDS:
                 l_raw_cols.append(gc.columns.PRE_OR_POST)
                 l_merge_cols.append(gc.columns.PRE_OR_POST)
             if gc.columns.FREE_LIVING_LABEL in df_side.columns:
@@ -446,6 +445,9 @@ def generate_results_quantification(subject: str) -> tuple[dict, pd.DataFrame]:
 def generate_results(subject, step):
     if step not in ['gait', 'arm_activity', 'quantification']:
         raise ValueError(f"Invalid step: {step}")
+
+    if subject in gc.participant_ids.L_HC_IDS and step == 'arm_activity':
+        return None
     
     if step in ['gait', 'arm_activity']:
         d_output =  generate_results_classification(
