@@ -1,6 +1,7 @@
 import numpy as np
+import pandas as pd
 
-from pdathome.constants import gait_constants as gc, mappings as mp
+from pdathome.constants import global_constants as gc, mappings as mp
 
 def extract_features(df, l_groupby, l_metrics, l_aggregates, l_quantiles=[]):
     """
@@ -152,3 +153,85 @@ def bootstrap_samples(data, stat, num_samples=5000):
         return np.percentile(bootstraps, 95, axis=1)
     else:
         raise ValueError("Unsupported stat, choose either 'median' or '95'.")
+    
+
+def compute_effect_size(df, parameter, stat): 
+    """
+    Computes effect size between pre-med and post-med parameters using either bootstrapped standard deviation or pooled standard deviation.
+    
+    Args:
+    - df (pd.DataFrame): DataFrame containing the data.
+    - parameter (str): The parameter column to analyze.
+    - stat (str): The point estimate statistic ('median' or '95').
+    - use_bootstrap_std (bool): Whether to use bootstrapped standard deviation (True) or pooled standard deviation (False).
+    
+    Returns:
+    - d_effect_size (dict): Dictionary containing effect size information.
+    - d_diffs (dict): Dictionary containing bootstrapped differences if applicable.
+    """
+    df_copy = df.copy()
+    df_copy['dataset'] = 'Predicted gait'
+
+    # Create predicted gait and annotated datasets
+    df_pred = df_copy.loc[(df_copy[gc.columns.PRED_OTHER_ARM_ACTIVITY] == 0)].copy()
+    df_pred['dataset'] = 'Predicted gait predicted NOAA'
+
+    df_ann = df_copy.loc[(df_copy['other_arm_activity_boolean'] == 0)].copy()
+    df_ann['dataset'] = 'Predicted gait annotated NOAA'
+
+    # Combine the datasets
+    df_combined = pd.concat([df_copy, df_pred, df_ann], axis=0).reset_index(drop=True)
+
+    d_effect_size = {}
+    d_diffs = {}
+
+    for dataset in df_combined['dataset'].unique():
+        d_effect_size[dataset] = {}
+
+        # Split into pre-med and post-med
+        df_pre = df_combined.loc[(df_combined['dataset'] == dataset) & (df_combined[gc.columns.PRE_OR_POST] == gc.descriptives.PRE_MED)]
+        df_post = df_combined.loc[(df_combined['dataset'] == dataset) & (df_combined[gc.columns.PRE_OR_POST] == gc.descriptives.POST_MED)]
+
+        for segment_category in [1, 2, 3, 4, 'overall']:
+            # Filter by segment category only if not 'overall'
+            if segment_category != 'overall':
+                df_pre_cat = df_pre.loc[df_pre[gc.columns.TRUE_GAIT_SEGMENT_CAT] == segment_category]
+                df_post_cat = df_post.loc[df_post[gc.columns.TRUE_GAIT_SEGMENT_CAT] == segment_category]
+            else:
+                df_pre_cat = df_pre
+                df_post_cat = df_post
+
+            # Get parameter values for pre and post
+            pre_vals = df_pre_cat[parameter].dropna().values
+            post_vals = df_post_cat[parameter].dropna().values
+            
+            if len(pre_vals) != 0 and len(post_vals) != 0:
+                d_effect_size[dataset][segment_category] = {}
+                
+                # Point estimate of pre- and post-med (median or 95th percentile)
+                if stat == 'median':
+                    mu_pre = np.median(pre_vals)
+                    mu_post = np.median(post_vals)
+                elif stat == '95':
+                    mu_pre = np.percentile(pre_vals, 95)
+                    mu_post = np.percentile(post_vals, 95)
+
+                d_effect_size[dataset][segment_category]['mu_pre'] = mu_pre
+                d_effect_size[dataset][segment_category]['mu_post'] = mu_post
+
+                # Perform bootstrapping for pre- and post-medication values
+                bootstrapped_pre = bootstrap_samples(pre_vals, stat)
+                bootstrapped_post = bootstrap_samples(post_vals, stat)
+
+                # Compute bootstrapped differences
+                bootstrapped_differences = bootstrapped_post - bootstrapped_pre
+                std_bootstrap = np.std(bootstrapped_differences)
+                    
+                # Store the computed values
+                d_effect_size[dataset][segment_category]['std'] = std_bootstrap
+                d_effect_size[dataset][segment_category]['effect_size'] = (mu_post - mu_pre) / std_bootstrap
+
+                if segment_category == 'overall':
+                    d_diffs[dataset] = bootstrapped_differences
+
+    return d_effect_size, d_diffs
