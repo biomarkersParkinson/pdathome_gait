@@ -89,7 +89,7 @@ class Columns:
     TRUE_GAIT_SEGMENT_NR: str = 'true_gait_segment_nr'
     PRED_GAIT_SEGMENT_NR: str = 'pred_gait_segment_nr'
     TRUE_GAIT_SEGMENT_CAT: str = 'true_gait_segment_cat'
-    PRED_GAIT_SEGMENT_CAT: str = 'true_gait_segment_cat'
+    PRED_GAIT_SEGMENT_CAT: str = 'pred_gait_segment_cat'
     L_ACCELEROMETER: List[str] = field(default_factory=lambda: [
         DataColumns.ACCELEROMETER_X, DataColumns.ACCELEROMETER_Y, DataColumns.ACCELEROMETER_Z
     ])
@@ -272,6 +272,13 @@ segment_map = {
     2: 'moderately_long',
     3: 'long',
     4: 'very_long'
+}
+
+segment_rename = {
+    'short': 'Short [< 5s]',
+    'moderately_long': 'Moderately long [5-10s]',
+    'long': 'Long [10-20s]',
+    'very_long': 'Very long [> 20s]'
 }
 
 tiers_labels_map = {
@@ -546,6 +553,7 @@ d_updrs_scoring_map = {
 class Mappings:
     activity_map: dict
     segment_map: dict
+    segment_rename: dict
     tiers_labels_map: dict
     tiers_rename: dict
     arm_labels_rename: dict
@@ -555,6 +563,7 @@ class Mappings:
 mappings = Mappings(
     activity_map = activity_map,
     segment_map = segment_map,
+    segment_rename = segment_rename,
     tiers_labels_map = tiers_labels_map,
     tiers_rename = tiers_rename,
     arm_labels_rename = arm_labels_rename,
