@@ -453,10 +453,9 @@ def generate_results(subject, step):
 
     if subject in gc.participant_ids.L_HC_IDS and step == 'arm_activity':
         return None
-
-    print(f"Processing {subject} - {step}...")
     
     if step in ['gait', 'arm_activity']:
+        print(f"Processing {subject} - {step}...")
         d_output =  generate_results_classification(
             step=step, 
             subject=subject,
@@ -467,6 +466,7 @@ def generate_results(subject, step):
     else:
         # Only run generate_results_quantification if subject is in L_PD_IDS
         if subject in gc.participant_ids.L_PD_IDS:
+            print(f"Processing {subject} - {step}...")
             d_output, df_diff = generate_results_quantification(subject)
             return d_output, df_diff
 
