@@ -342,7 +342,9 @@ def load_arm_activity_features(subject: str, side: str) -> pd.DataFrame:
 
 def load_arm_activity_timestamps(subject: str, side: str) -> pd.DataFrame:
     """Load arm activity timestamps for a given subject and side."""
-    return pd.read_pickle(os.path.join(gc.paths.PATH_ARM_ACTIVITY_FEATURES, f'{subject}_{side}_ts.pkl'))
+    df_ts =  pd.read_pickle(os.path.join(gc.paths.PATH_ARM_ACTIVITY_FEATURES, f'{subject}_{side}_ts.pkl'))
+    df_ts[gc.columns.SIDE] = side
+    return df_ts
 
 
 def generate_results_quantification(subject: str) -> tuple[dict, pd.DataFrame]:
