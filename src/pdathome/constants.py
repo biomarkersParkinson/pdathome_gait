@@ -274,6 +274,13 @@ segment_map = {
     4: 'very_long'
 }
 
+segment_rename = {
+    'short': 'Short [< 5s]',
+    'moderately_long': 'Moderately long [5-10s]',
+    'long': 'Long [10-20s]',
+    'very_long': 'Very long [> 20s]'
+}
+
 tiers_labels_map = {
     'General protocol structure' : {
         1.0: 'Start synchronization of sensors',
@@ -546,6 +553,7 @@ d_updrs_scoring_map = {
 class Mappings:
     activity_map: dict
     segment_map: dict
+    segment_rename: dict
     tiers_labels_map: dict
     tiers_rename: dict
     arm_labels_rename: dict
@@ -555,6 +563,7 @@ class Mappings:
 mappings = Mappings(
     activity_map = activity_map,
     segment_map = segment_map,
+    segment_rename = segment_rename,
     tiers_labels_map = tiers_labels_map,
     tiers_rename = tiers_rename,
     arm_labels_rename = arm_labels_rename,
