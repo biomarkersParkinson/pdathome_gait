@@ -453,7 +453,7 @@ def generate_results(subject, step):
         raise ValueError(f"Invalid step: {step}")
 
     if subject in gc.participant_ids.L_HC_IDS and step == 'arm_activity':
-        return None
+        return
     
     if step in ['gait', 'arm_activity']:
         print(f"Processing {subject} - {step}...")
@@ -462,14 +462,24 @@ def generate_results(subject, step):
             subject=subject,
             segment_gap_s=1.5
         )
-        return d_output
+
+        step_filename = f'{subject}_{step}.json'
+        with open(os.path.join(gc.paths.PATH_OUTPUT, 'classification_performance', step, step_filename), 'w') as f:
+            json.dump(d_output, f, indent=4)
+
+        return
 
     else:
         # Only run generate_results_quantification if subject is in L_PD_IDS
         if subject in gc.participant_ids.L_PD_IDS:
             print(f"Processing {subject} - {step}...")
             d_output, df_diff = generate_results_quantification(subject)
-            return d_output, df_diff
 
-        # Return None or an empty dictionary if the subject is not in L_PD_IDS
-        return None
+            json_filename = f'{subject}_{step}.json'
+            pkl_filename = f'{subject}_{step}.pkl'
+            with open(os.path.join(gc.paths.PATH_OUTPUT, 'quantification', json_filename), 'w') as f:
+                json.dump(d_output, f, indent=4)
+
+            df_diff.to_pickle(os.path.join(gc.paths.PATH_OUTPUT, 'quantification', pkl_filename))
+
+        return
