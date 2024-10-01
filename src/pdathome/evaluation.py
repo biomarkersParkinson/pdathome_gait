@@ -320,7 +320,9 @@ def generate_results_classification(step, subject, segment_gap_s):
                     }
                 }
 
-                df_med_stage[gc.columns.TRUE_GAIT_SEGMENT_CAT] = df_med_stage[gc.columns.TRUE_GAIT_SEGMENT_CAT].apply(lambda x: mp.segment_map[x])
+                df_med_stage[gc.columns.TRUE_GAIT_SEGMENT_CAT] = df_med_stage[gc.columns.TRUE_GAIT_SEGMENT_CAT].apply(
+                    lambda x: mp.segment_map[x] if pd.notna(x) else x
+                )
 
                 # minutes of data per med stage, per affected side, per segment duration category
                 d_performance[model][affected_side][med_stage]['segment_duration'] = {}
@@ -402,11 +404,11 @@ def generate_results_classification(step, subject, segment_gap_s):
             df_prevalence_correction = pd.merge(left=df_prevalence_correction, right=df_prev_overall, how='left', on=['segment_duration'])            
 
             for med_stage in df_side[gc.columns.PRE_OR_POST].unique():
-                spec_corrected_1 = df_prevalence_correction.loc[df_prevalence_correction['pre_or_post']==med_stage, 'spec'] * df_prevalence_correction.loc[df_prevalence_correction['pre_or_post']==med_stage, 'prop_specific'] / df_prevalence_correction.loc[df_prevalence_correction['pre_or_post']==med_stage, 'prop_overall']
-                spec_corrected_2 = np.sum(np.multiply(df_prevalence_correction.loc[df_prevalence_correction['pre_or_post']==med_stage, 'spec'], df_prevalence_correction.loc[df_prevalence_correction['pre_or_post']==med_stage, 'prop_overall']))
+                spec_corrected = (df_prevalence_correction.loc[df_prevalence_correction['pre_or_post']==med_stage, 'spec'] * 
+                                  df_prevalence_correction.loc[df_prevalence_correction['pre_or_post']==med_stage, 'prop_specific'] / 
+                                  df_prevalence_correction.loc[df_prevalence_correction['pre_or_post']==med_stage, 'prop_overall']).values[0]
                 
-                d_performance[model][affected_side][med_stage]['spec_corrected_1'] = spec_corrected_1
-                d_performance[model][affected_side][med_stage]['spec_corrected_2'] = spec_corrected_2
+                d_performance[model][affected_side][med_stage]['spec_corrected'] = spec_corrected
     
     return d_performance
 
@@ -540,7 +542,7 @@ def generate_results(subject, step):
         json_filename = f'{subject}.json'
 
         with open(os.path.join(gc.paths.PATH_OUTPUT, 'classification_performance', step, json_filename), 'w') as f:
-                json.dump(d_output, f, indent=4)
+            json.dump(d_output, f, indent=4)
         return 
 
     else:
