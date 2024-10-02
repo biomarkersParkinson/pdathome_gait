@@ -268,6 +268,7 @@ activity_map = {
 }
 
 segment_map = {
+    -1: 'non_gait',
     1: 'short',
     2: 'moderately_long',
     3: 'long',
