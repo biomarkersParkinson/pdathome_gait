@@ -136,18 +136,14 @@ def preprocess_gait_detection(subject):
 
         config = GaitFeatureExtractionConfig()
 
-        config.l_data_point_level_cols += [gc.columns.TIME, gc.columns.FREE_LIVING_LABEL]
-        l_ts_cols = [gc.columns.TIME, gc.columns.WINDOW_NR, gc.columns.FREE_LIVING_LABEL]
+        config.l_data_point_level_cols += [gc.columns.TIME]
+        l_ts_cols = [gc.columns.TIME, gc.columns.WINDOW_NR]
         l_export_cols = [gc.columns.TIME, gc.columns.WINDOW_NR, gc.columns.ACTIVITY_LABEL_MAJORITY_VOTING, gc.columns.GAIT_MAJORITY_VOTING] + list(config.d_channels_values.keys())
         l_single_value_cols = None
         if subject in gc.participant_ids.L_PD_IDS:
-            config.l_data_point_level_cols.append(gc.columns.ARM_LABEL)
-            l_ts_cols += [gc.columns.PRE_OR_POST, gc.columns.ARM_LABEL]
+            l_ts_cols += [gc.columns.PRE_OR_POST]
             l_export_cols += [gc.columns.PRE_OR_POST, gc.columns.ARM_LABEL_MAJORITY_VOTING]
             l_single_value_cols = [gc.columns.PRE_OR_POST]
-        if subject in gc.participant_ids.L_TREMOR_IDS:
-            config.l_data_point_level_cols.append(gc.columns.TREMOR_LABEL)
-            l_ts_cols.append(gc.columns.TREMOR_LABEL)
 
 
         df_windowed = tabulate_windows(
