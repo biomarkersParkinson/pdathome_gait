@@ -304,8 +304,9 @@ def preprocess_filtering_gait(subject):
         arm_activity_config.l_data_point_level_cols += [
             gc.columns.FREE_LIVING_LABEL
         ]
+        l_single_value_cols = [gc.columns.PRED_GAIT_SEGMENT_NR]
         if subject in gc.participant_ids.L_PD_IDS:
-            l_single_value_cols = [gc.columns.PRE_OR_POST]
+            l_single_value_cols.append(gc.columns.PRE_OR_POST)
             arm_activity_config.l_data_point_level_cols.append(gc.columns.ARM_LABEL)
 
         if 'angle_smooth' in arm_activity_config.l_data_point_level_cols:

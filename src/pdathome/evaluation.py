@@ -293,15 +293,14 @@ def generate_results_classification(step, subject, segment_gap_s):
             )
 
             df_raw.loc[df_raw[gc.columns.FREE_LIVING_LABEL] == 'Walking', gc.columns.TRUE_GAIT_SEGMENT_NR] = walking_segments
+            df_raw[gc.columns.TRUE_GAIT_SEGMENT_NR] = df_raw[gc.columns.TRUE_GAIT_SEGMENT_NR].fillna(-1)
 
             # Map categories to segments of true gait
-            df_raw.loc[df_raw[gc.columns.FREE_LIVING_LABEL] == 'Walking', gc.columns.TRUE_GAIT_SEGMENT_CAT] = categorize_segments(
-                df=df_raw.loc[df_raw[gc.columns.FREE_LIVING_LABEL] == 'Walking'],
+            df_raw[gc.columns.TRUE_GAIT_SEGMENT_CAT] = categorize_segments(
+                df=df_raw,
                 segment_nr_colname=gc.columns.TRUE_GAIT_SEGMENT_NR,
                 sampling_frequency=gc.parameters.DOWNSAMPLED_FREQUENCY
             )
-
-            df_raw[gc.columns.TRUE_GAIT_SEGMENT_NR] = df_raw[gc.columns.TRUE_GAIT_SEGMENT_NR].fillna(-1)
 
             if subject in gc.participant_ids.L_PD_IDS:
                 df_side = pd.merge(left=df_side, right=df_raw[l_raw_cols], how='left', on=l_merge_cols)
@@ -327,8 +326,6 @@ def generate_results_classification(step, subject, segment_gap_s):
                         f'non_{step}_s': seconds_false,
                     }
                 }
-
-                df_med_stage[gc.columns.TRUE_GAIT_SEGMENT_CAT] = df_med_stage[gc.columns.TRUE_GAIT_SEGMENT_CAT].apply(lambda x: mp.segment_map[x])
 
                 # minutes of data per med stage, per affected side, per segment duration category
                 d_performance[model][affected_side][med_stage]['segment_duration'] = {}
@@ -410,11 +407,12 @@ def generate_results_classification(step, subject, segment_gap_s):
             df_prevalence_correction = pd.merge(left=df_prevalence_correction, right=df_prev_overall, how='left', on=['segment_duration'])            
 
             for med_stage in df_side[gc.columns.PRE_OR_POST].unique():
-                spec_corrected_1 = df_prevalence_correction.loc[df_prevalence_correction['pre_or_post']==med_stage, 'spec'] * df_prevalence_correction.loc[df_prevalence_correction['pre_or_post']==med_stage, 'prop_specific'] / df_prevalence_correction.loc[df_prevalence_correction['pre_or_post']==med_stage, 'prop_overall']
-                spec_corrected_2 = np.sum(np.multiply(df_prevalence_correction.loc[df_prevalence_correction['pre_or_post']==med_stage, 'spec'], df_prevalence_correction.loc[df_prevalence_correction['pre_or_post']==med_stage, 'prop_overall']))
+                spec_corrected = np.sum(np.multiply(
+                    df_prevalence_correction.loc[df_prevalence_correction['pre_or_post']==med_stage, 'spec'], 
+                    df_prevalence_correction.loc[df_prevalence_correction['pre_or_post']==med_stage, 'prop_overall']
+                ))
                 
-                d_performance[model][affected_side][med_stage]['spec_corrected_1'] = spec_corrected_1
-                d_performance[model][affected_side][med_stage]['spec_corrected_2'] = spec_corrected_2
+                d_performance[model][affected_side][med_stage]['spec_corrected'] = spec_corrected
     
     return d_performance
 
