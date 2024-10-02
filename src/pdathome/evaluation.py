@@ -208,7 +208,7 @@ def generate_results_classification(step, subject, segment_gap_s):
             label_colname = gc.columns.FREE_LIVING_LABEL
 
             # Labels
-            boolean_colname = 'gait_boolean'
+            boolean_colname = 'gait'
             value_label = 'Walking'
 
             # Classification threshold
@@ -224,7 +224,7 @@ def generate_results_classification(step, subject, segment_gap_s):
             label_colname = gc.columns.ARM_LABEL
 
             # Labels
-            boolean_colname = 'other_arm_activity_boolean'
+            boolean_colname = 'other_arm_activity'
             value_label = 'Gait without other behaviours or other positions'
 
             # Classification threshold

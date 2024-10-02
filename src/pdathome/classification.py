@@ -180,13 +180,7 @@ def windows_to_timestamps(subject, df, path_output, pred_proba_colname, step):
     l_subj_cols = [gc.columns.SIDE, gc.columns.WINDOW_NR, pred_proba_colname]
     l_merge_ts_cols = [gc.columns.WINDOW_NR, gc.columns.SIDE]
     l_groupby_cols = [gc.columns.TIME, gc.columns.SIDE]
-    l_explode_cols = [gc.columns.TIME, gc.columns.FREE_LIVING_LABEL]
-
-    # Add PD-specific gc.columns
-    if subject in gc.participant_ids.L_PD_IDS:
-        l_subj_cols.append(gc.columns.PRE_OR_POST)
-        l_groupby_cols.append(gc.columns.PRE_OR_POST)
-        l_merge_ts_cols.append(gc.columns.PRE_OR_POST)
+    l_explode_cols = [gc.columns.TIME]
 
     if step == 'gait':
         path_features = gc.paths.PATH_GAIT_FEATURES
