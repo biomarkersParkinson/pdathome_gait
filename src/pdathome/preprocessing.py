@@ -134,27 +134,17 @@ def preprocess_gait_detection(subject):
         # Drop original accelerometer gc.columns and append filtered results
         df = df.drop(columns=accel_cols).rename(columns={f'filt_{col}': col for col in accel_cols})
 
-        # Group consecutive timestamps into segments with new segments starting after a pre-specified gap
-        df[gc.columns.TRUE_GAIT_SEGMENT_NR] = create_segments(
-            df=df,
-            time_column_name=gc.columns.TIME,
-            gap_threshold_s=gc.parameters.SEGMENT_GAP_GAIT
-        )
-
         config = GaitFeatureExtractionConfig()
 
-        config.l_data_point_level_cols += [gc.columns.TIME, gc.columns.TRUE_GAIT_SEGMENT_NR, gc.columns.FREE_LIVING_LABEL]
-        l_ts_cols = [gc.columns.TIME, gc.columns.TRUE_GAIT_SEGMENT_NR, gc.columns.WINDOW_NR, gc.columns.FREE_LIVING_LABEL]
+        config.l_data_point_level_cols += [gc.columns.TIME, gc.columns.FREE_LIVING_LABEL]
+        l_ts_cols = [gc.columns.TIME, gc.columns.WINDOW_NR]
         l_export_cols = [gc.columns.TIME, gc.columns.WINDOW_NR, gc.columns.ACTIVITY_LABEL_MAJORITY_VOTING, gc.columns.GAIT_MAJORITY_VOTING] + list(config.d_channels_values.keys())
         l_single_value_cols = None
         if subject in gc.participant_ids.L_PD_IDS:
             config.l_data_point_level_cols.append(gc.columns.ARM_LABEL)
-            l_ts_cols += [gc.columns.PRE_OR_POST, gc.columns.ARM_LABEL]
+            l_ts_cols += [gc.columns.PRE_OR_POST]
             l_export_cols += [gc.columns.PRE_OR_POST, gc.columns.ARM_LABEL_MAJORITY_VOTING]
             l_single_value_cols = [gc.columns.PRE_OR_POST]
-        if subject in gc.participant_ids.L_TREMOR_IDS:
-            config.l_data_point_level_cols.append(gc.columns.TREMOR_LABEL)
-            l_ts_cols.append(gc.columns.TREMOR_LABEL)
 
 
         df_windowed = tabulate_windows(
@@ -215,17 +205,7 @@ def preprocess_filtering_gait(subject):
             threshold = float(f.read())
 
         # Configure gc.columns based on cohort
-        if subject in gc.participant_ids.L_PD_IDS:
-            l_cols_to_export = [
-                gc.columns.TIME, gc.columns.TRUE_GAIT_SEGMENT_NR, gc.columns.TRUE_GAIT_SEGMENT_CAT,
-                gc.columns.PRED_GAIT_SEGMENT_NR, gc.columns.WINDOW_NR, gc.columns.FREE_LIVING_LABEL,
-                gc.columns.ARM_LABEL, gc.columns.PRE_OR_POST
-            ]
-        else:
-            l_cols_to_export = [
-                gc.columns.TIME, gc.columns.TRUE_GAIT_SEGMENT_NR, gc.columns.TRUE_GAIT_SEGMENT_CAT,
-                gc.columns.PRED_GAIT_SEGMENT_NR, gc.columns.WINDOW_NR, gc.columns.FREE_LIVING_LABEL
-            ]
+        l_cols_to_export = [gc.columns.TIME, gc.columns.WINDOW_NR]
 
         # Load sensor data
         df_sensors = pd.read_pickle(os.path.join(gc.paths.PATH_PREPARED_DATA, f'{subject}_{side}.pkl'))
@@ -298,23 +278,6 @@ def preprocess_filtering_gait(subject):
         # Filter unobserved data
         if subject in gc.participant_ids.L_PD_IDS:
             df = df[df[gc.columns.ARM_LABEL] != 'cant assess']
-
-        # Create the segments for the subset of 'Walking' data
-        walking_segments = create_segments(
-            df=df.loc[df[gc.columns.FREE_LIVING_LABEL] == 'Walking'],
-            time_column_name=gc.columns.TIME,
-            gap_threshold_s=gc.parameters.SEGMENT_GAP_GAIT
-        )
-
-        # Assign the result back to the TRUE_GAIT_SEGMENT_NR column for the relevant rows
-        df.loc[df[gc.columns.FREE_LIVING_LABEL] == 'Walking', gc.columns.TRUE_GAIT_SEGMENT_NR] = walking_segments
-
-        # Map categories to segments of true gait
-        df.loc[df[gc.columns.FREE_LIVING_LABEL] == 'Walking', gc.columns.TRUE_GAIT_SEGMENT_CAT] = categorize_segments(
-            df=df.loc[df[gc.columns.FREE_LIVING_LABEL] == 'Walking'],
-            segment_nr_colname=gc.columns.TRUE_GAIT_SEGMENT_NR,
-            sampling_frequency=arm_activity_config.sampling_frequency
-        )
         
         # Use only predicted gait for the subsequent steps
         df = df[df[gc.columns.PRED_GAIT] == 1].reset_index(drop=True)
@@ -324,13 +287,6 @@ def preprocess_filtering_gait(subject):
             df=df,
             time_column_name=gc.columns.TIME,
             gap_threshold_s=gc.parameters.SEGMENT_GAP_GAIT
-        )
-
-        # Map categories to segments of predicted gait
-        df[gc.columns.PRED_GAIT_SEGMENT_CAT] = categorize_segments(
-            df=df,
-            segment_nr_colname=gc.columns.PRED_GAIT_SEGMENT_NR,
-            sampling_frequency=arm_activity_config.sampling_frequency
         )
 
         # Remove any segments that do not adhere to predetermined criteria
@@ -343,9 +299,9 @@ def preprocess_filtering_gait(subject):
 
         # Create windows of fixed length and step size from the time series
         arm_activity_config.l_data_point_level_cols += [
-            gc.columns.FREE_LIVING_LABEL, gc.columns.TRUE_GAIT_SEGMENT_NR, gc.columns.TRUE_GAIT_SEGMENT_CAT
+            gc.columns.FREE_LIVING_LABEL
         ]
-        l_single_value_cols = [gc.columns.PRED_GAIT_SEGMENT_NR, gc.columns.PRED_GAIT_SEGMENT_CAT]
+        l_single_value_cols = [gc.columns.PRED_GAIT_SEGMENT_NR]
         if subject in gc.participant_ids.L_PD_IDS:
             l_single_value_cols.append(gc.columns.PRE_OR_POST)
             arm_activity_config.l_data_point_level_cols.append(gc.columns.ARM_LABEL)
@@ -366,6 +322,13 @@ def preprocess_filtering_gait(subject):
             for segment_nr in df[gc.columns.PRED_GAIT_SEGMENT_NR].unique()
         ]
         l_dfs = [df for df in l_dfs if not df.empty]
+
+        # Update window numbers to be unique across segments
+        max_window_nr = 0
+        for segment_nr in sorted(df[gc.columns.PRED_GAIT_SEGMENT_NR].unique()):  
+            segment_mask = df_windowed[gc.columns.PRED_GAIT_SEGMENT_NR] == segment_nr
+            df_windowed.loc[segment_mask, gc.columns.WINDOW_NR] += max_window_nr
+            max_window_nr = df_windowed.loc[segment_mask, gc.columns.WINDOW_NR].max()
 
         df_windowed = pd.concat(l_dfs).reset_index(drop=True)
 
@@ -455,9 +418,7 @@ def preprocess_filtering_gait(subject):
         df_windowed.fillna(0, inplace=True)
         df_windowed[gc.columns.SIDE] = side
 
-        l_export_cols = [
-            gc.columns.TIME, gc.columns.WINDOW_NR, gc.columns.PRED_GAIT_SEGMENT_NR, gc.columns.PRED_GAIT_SEGMENT_CAT
-        ] + list(arm_activity_config.d_channels_values.keys())
+        l_export_cols = [gc.columns.TIME, gc.columns.WINDOW_NR] + list(arm_activity_config.d_channels_values.keys())
 
         if subject in gc.participant_ids.L_PD_IDS:
             l_export_cols += [gc.columns.PRE_OR_POST, gc.columns.ARM_LABEL_MAJORITY_VOTING, gc.columns.OTHER_ARM_ACTIVITY_MAJORITY_VOTING]
