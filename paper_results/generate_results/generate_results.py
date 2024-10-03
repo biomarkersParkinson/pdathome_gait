@@ -17,7 +17,7 @@ def wrapper_function(subject_step):
     subject, step = subject_step
     return generate_results(subject, step)
 
-def parallelize_function(n_processes, l_ids, func, step):
+def parallelize_function(n_processes, l_ids, step):
     with Pool(int(n_processes)) as p:
         try:
             # Prepare arguments as tuples
@@ -32,7 +32,7 @@ if __name__ == '__main__':
     nproc = int(sys.argv[1])  # Number of parallel processes
     l_ids = sys.argv[2:]      # List of ids to process
 
-    l_steps = ['gait', 'arm_activity']
+    l_steps = ['gait']
 
     for step in l_steps:
-        parallelize_function(nproc, l_ids, generate_results, step)
+        parallelize_function(nproc, l_ids, step)
