@@ -3,7 +3,12 @@
 #SBATCH -N 1
 #SBATCH -t 02:00:00
 #SBATCH -p genoa
-#SBATCH -o ../../slurm/output.%j.out # STDOUT
+
+# Get the current date and time for the output file
+timestamp=$(date +%Y%m%d_%H%M%S)
+
+# Set output file with timestamp
+#SBATCH -o ../../slurm/output_%x_%j_${timestamp}.out
 
 #Loading modules
 module load 2023
