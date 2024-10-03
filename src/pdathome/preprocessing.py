@@ -319,14 +319,14 @@ def preprocess_filtering_gait(subject):
         ]
         l_dfs = [df for df in l_dfs if not df.empty]
 
+        df_windowed = pd.concat(l_dfs).reset_index(drop=True)
+
         # Update window numbers to be unique across segments
         max_window_nr = 0
         for segment_nr in sorted(df[gc.columns.PRED_GAIT_SEGMENT_NR].unique()):  
             segment_mask = df_windowed[gc.columns.PRED_GAIT_SEGMENT_NR] == segment_nr
             df_windowed.loc[segment_mask, gc.columns.WINDOW_NR] += max_window_nr
             max_window_nr = df_windowed.loc[segment_mask, gc.columns.WINDOW_NR].max()
-
-        df_windowed = pd.concat(l_dfs).reset_index(drop=True)
 
         # Save windows with timestamps for later use
         df_windowed[l_cols_to_export].to_pickle(os.path.join(gc.paths.PATH_ARM_ACTIVITY_FEATURES, f'{subject}_{side}_ts.pkl'))
