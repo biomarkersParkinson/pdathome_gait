@@ -198,8 +198,8 @@ def preprocess_gait_detection(subject):
 
 def preprocess_filtering_gait(subject):
     print(f"Time {datetime.datetime.now()} - {subject} - Starting preprocessing filtering gait ...")
+    df_pred = pd.read_pickle(os.path.join(gc.paths.PATH_GAIT_PREDICTIONS, gc.classifiers.GAIT_DETECTION_CLASSIFIER_SELECTED, f'{subject}.pkl'))
     for side in [gc.descriptives.MOST_AFFECTED_SIDE, gc.descriptives.LEAST_AFFECTED_SIDE]:
-        df_pred = pd.read_pickle(os.path.join(gc.paths.PATH_GAIT_PREDICTIONS, gc.classifiers.GAIT_DETECTION_CLASSIFIER_SELECTED, f'{subject}.pkl'))
 
         with open(os.path.join(gc.paths.PATH_THRESHOLDS, 'gait', f'{gc.classifiers.GAIT_DETECTION_CLASSIFIER_SELECTED}.txt'), 'r') as f:
             threshold = float(f.read())
@@ -238,11 +238,7 @@ def preprocess_filtering_gait(subject):
         df_sensors = df_sensors.drop(columns=accel_cols).rename(columns={f'filt_{col}': col for col in accel_cols})
 
         # Merge sensor data with predictions
-        l_merge_cols = [gc.columns.TIME, gc.columns.FREE_LIVING_LABEL]
-        if subject in gc.participant_ids.L_PD_IDS:
-            l_merge_cols.append(gc.columns.ARM_LABEL)
-            if gc.columns.PRE_OR_POST in df_pred_side.columns:
-                l_merge_cols.append(gc.columns.PRE_OR_POST)
+        l_merge_cols = [gc.columns.TIME]
 
         df = pd.merge(left=df_pred_side, right=df_sensors, how='left', on=l_merge_cols).reset_index(drop=True)
 
