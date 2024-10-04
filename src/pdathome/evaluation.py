@@ -262,6 +262,9 @@ def generate_results_classification(step, subject, segment_gap_s):
         
         if subject in gc.participant_ids.L_PD_IDS:
             l_raw_cols += [gc.columns.ARM_LABEL, gc.columns.PRE_OR_POST]
+
+        if subject in gc.participant_ids.L_TREMOR_IDS:
+            l_raw_cols.append(gc.columns.TREMOR_LABEL)
         
         # Predictions
         df_predictions = pd.read_pickle(os.path.join(path_predictions, model, f'{subject}.pkl'))
@@ -397,22 +400,18 @@ def generate_results_classification(step, subject, segment_gap_s):
                             arm_label_metric: calculate_metric(df=df_arm_activity, pred_colname=pred_colname, true_colname=boolean_colname, metric=arm_label_metric)
                         }
 
-                # # effect of tremor on specificity
-                # if subject in gc.participant_ids.L_TREMOR_IDS:
+                # effect of tremor on specificity
+                if subject in gc.participant_ids.L_TREMOR_IDS:
 
-                #     df_med_stage = df_side.loc[df_side[gc.columns.PRE_OR_POST]==med_stage].copy()
+                    df_med_stage['tremor_label_binned'] = df_med_stage[gc.columns.TREMOR_LABEL].apply(
+                        lambda x: 'tremor' if x in ['Slight or mild tremor', 'Moderate tremor', 'Severe tremor', 'Tremor with significant upper limb activity'] else
+                        ('no_tremor' if x in ['No tremor', 'Periodic activity of hand/arm similar frequency to tremor', 'No tremor with significant upper limb activity'] else
+                        np.nan
+                        )
+                    )
 
-                #     df_tremor = pd.merge(left=df_med_stage, right=df_ts.loc[df_ts[gc.columns.PRE_OR_POST]==med_stage], on=[gc.columns.TIME, gc.columns.FREE_LIVING_LABEL, gc.columns.PRE_OR_POST, gc.columns.ARM_LABEL], how='left')
-
-                #     df_tremor['tremor_label_binned'] = df_tremor[gc.columns.TREMOR_LABEL].apply(
-                #         lambda x: 'tremor' if x in ['Slight or mild tremor', 'Moderate tremor', 'Severe tremor', 'Tremor with significant upper limb activity'] else
-                #         ('no_tremor' if x in ['No tremor', 'Periodic activity of hand/arm similar frequency to tremor', 'No tremor with significant upper limb activity'] else
-                #         np.nan
-                #         )
-                #     )
-
-                #     for tremor_type in [x for x in df_tremor['tremor_label_binned'].unique() if not pd.isna(x)]:
-                #         d_performance[model][affected_side][med_stage][f'{tremor_type}_spec'] = calculate_spec(df=df_tremor.loc[df_tremor['tremor_label_binned']==tremor_type], pred_colname=pred_colname, true_colname='label_boolean')
+                    for tremor_type in [x for x in df_med_stage['tremor_label_binned'].unique() if not pd.isna(x)]:
+                        d_performance[model][affected_side][med_stage][f'{tremor_type}_spec'] = calculate_spec(df=df_med_stage.loc[df_med_stage['tremor_label_binned']==tremor_type], pred_colname=pred_colname, true_colname='label_boolean')
                 
             # Convert prevalence data into a DataFrame outside of the loop
             df_prevalence_correction = pd.DataFrame(prevalence_data)
