@@ -4,14 +4,8 @@
 #SBATCH -t 02:00:00
 #SBATCH -p genoa
 
-# Get the current date and time for the output file
-timestamp=$(date +%Y%m%d_%H%M%S)
-
-# Define the output file with the timestamp
-output_file="../../slurm/output_${SLURM_JOB_NAME}_${SLURM_JOB_ID}_${timestamp}.out"
-
-# Run the sbatch command and specify the output file
-#SBATCH --output=$output_file 
+# Set the output directory and filename directly in the SBATCH directive
+#SBATCH --output=../../slurm/output_%x_%j.out
 
 # Load modules
 module load 2023
