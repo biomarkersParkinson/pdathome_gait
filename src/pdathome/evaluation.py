@@ -222,7 +222,7 @@ def generate_results_classification(step, subject, segment_gap_s):
 
             # Metrics
             metric_to_correct = 'sens'
-            arm_label_metric = 'spec'
+            arm_label_metric = 'sens'
 
             # Labels
             boolean_colname = 'gait'
@@ -249,7 +249,7 @@ def generate_results_classification(step, subject, segment_gap_s):
 
             # Metrics
             metric_to_correct = 'spec'
-            arm_label_metric = 'sens'
+            arm_label_metric = 'spec'
 
             # Values
             outcome_value = 0 # No other arm activity
