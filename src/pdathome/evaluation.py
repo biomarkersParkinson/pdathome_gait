@@ -162,44 +162,44 @@ def bland_altman_plot(df1, df2, *args, x=None, axs=None, hue='population', refer
     return axs, colors
 
 
-def generate_clinical_scores(l_ids):
+def generate_clinical_scores(subject):
     df_patient_info = pd.read_pickle(os.path.join(gc.paths.PATH_CLINICAL_DATA, 'df_patient_info_updrs_3.pkl'))
-    df_patient_info = df_patient_info.loc[df_patient_info['record_id'].isin(gc.participant_ids.L_PD_IDS)].reset_index(drop=True)
-    df_patient_info['age'] = datetime.datetime.now().year - df_patient_info['year_of_birth']
-    df_patient_info['years_since_diagnosis'] = datetime.datetime.now().year - df_patient_info['year_diagnosis']
-    df_patient_info['gender'] = df_patient_info['gender'].apply(lambda x: 'male' if x==1 else 'female')
+    df_subject = df_patient_info.loc[df_patient_info['record_id']==subject]
 
-    for col in ['age', 'years_since_diagnosis']:
-        df_patient_info[col] = df_patient_info[col].apply(lambda x: int(x))
+    age = int(datetime.datetime.now().year - df_subject['year_of_birth'].iloc[0])
+    ysd = int(datetime.datetime.now().year - df_subject['year_diagnosis'].iloc[0])
+    gender = 'male' if df_subject['gender'].iloc[0] == 1 else 'female'
 
-    d_clinical_scores = {}
+    d_clinical = {
+        'age': age,
+        'ysd': ysd,
+        'gender': gender,
+    }
 
-    for subject in l_ids:
-        d_clinical_scores[subject] = {}
-        d_clinical_scores[subject]['updrs'] = {}
-        for med_stage, med_prefix in zip([gc.descriptives.PRE_MED, gc.descriptives.POST_MED], ['OFF', 'ON']):
-            d_clinical_scores[subject]['updrs'][med_stage] = {}
-            for side in ['right', 'left']:
-                if subject in gc.participant_ids.L_PD_MOST_AFFECTED_RIGHT:
-                    if side == 'right':
-                        affected_side = gc.descriptives.MOST_AFFECTED_SIDE
-                    else:
-                        affected_side = gc.descriptives.LEAST_AFFECTED_SIDE
+    d_clinical['updrs'] = {}
+    for med_stage, med_prefix in zip([gc.descriptives.PRE_MED, gc.descriptives.POST_MED], ['OFF', 'ON']):
+        d_clinical['updrs'][med_stage] = {}
+        for side in ['right', 'left']:
+            if subject in gc.participant_ids.L_PD_MOST_AFFECTED_RIGHT:
+                if side == 'right':
+                    affected_side = gc.descriptives.MOST_AFFECTED_SIDE
                 else:
-                    if side == 'left':
-                        affected_side = gc.descriptives.MOST_AFFECTED_SIDE
-                    else:
-                        affected_side = gc.descriptives.LEAST_AFFECTED_SIDE
+                    affected_side = gc.descriptives.LEAST_AFFECTED_SIDE
+            else:
+                if side == 'left':
+                    affected_side = gc.descriptives.MOST_AFFECTED_SIDE
+                else:
+                    affected_side = gc.descriptives.LEAST_AFFECTED_SIDE
 
-                updrs_3_hypokinesia_stage_cols = [f'{med_prefix}_{x}' for x in mp.updrs_3_map[side]['hypokinesia'].keys()]
-                updrs_3_stage_cols = updrs_3_hypokinesia_stage_cols + [f'{med_prefix}_{x}' for x in mp.updrs_3_map[side]['tremor'].keys()]
-                
-                d_clinical_scores[subject]['updrs'][med_stage][affected_side] = {
-                    'subscore': np.sum(df_patient_info.loc[df_patient_info['record_id']==subject, updrs_3_hypokinesia_stage_cols], axis=1).values[0],
-                    'total': np.sum(df_patient_info.loc[df_patient_info['record_id']==subject, updrs_3_stage_cols], axis=1).values[0]
-                }
+            updrs_3_hypokinesia_stage_cols = [f'{med_prefix}_{x}' for x in mp.updrs_3_map[side]['hypokinesia'].keys()]
+            updrs_3_stage_cols = updrs_3_hypokinesia_stage_cols + [f'{med_prefix}_{x}' for x in mp.updrs_3_map[side]['tremor'].keys()]
+            
+            d_clinical['updrs'][med_stage][affected_side] = {
+                'subscore': np.sum(df_subject[updrs_3_hypokinesia_stage_cols], axis=1).values[0],
+                'total': np.sum(df_subject[updrs_3_stage_cols], axis=1).values[0]
+            }
 
-    return d_clinical_scores
+    return d_clinical
 
 
 def generate_results_classification(step, subject, segment_gap_s):
@@ -580,6 +580,9 @@ def generate_results(subject, step):
             subject=subject,
             segment_gap_s=1.5
         )
+
+        if subject in gc.participant_ids.L_PD_IDS:
+            d_output['clinical'] = generate_clinical_scores(subject)
 
         json_filename = f'{subject}.json'
 
