@@ -363,7 +363,7 @@ def generate_results_classification(step, subject, segment_gap_s):
                         'minutes': cat_minutes,
                         metric_to_correct: d_performance[model][affected_side][med_stage]['segment_duration'][segment_duration][metric_to_correct],
                         'segment_duration': segment_duration,
-                        'pre_or_post': med_stage
+                        gc.columns.PRE_OR_POST: med_stage
                     })
 
                     if subject in gc.participant_ids.L_PD_IDS:
@@ -411,7 +411,7 @@ def generate_results_classification(step, subject, segment_gap_s):
                     )
 
                     for tremor_type in [x for x in df_med_stage['tremor_label_binned'].unique() if not pd.isna(x)]:
-                        d_performance[model][affected_side][med_stage][f'{tremor_type}_spec'] = calculate_spec(df=df_med_stage.loc[df_med_stage['tremor_label_binned']==tremor_type], pred_colname=pred_colname, true_colname='label_boolean')
+                        d_performance[model][affected_side][med_stage][f'{tremor_type}_spec'] = calculate_spec(df=df_med_stage.loc[df_med_stage['tremor_label_binned']==tremor_type], pred_colname=pred_colname, true_colname=boolean_colname)
                 
             # Convert prevalence data into a DataFrame outside of the loop
             df_prevalence_correction = pd.DataFrame(prevalence_data)
@@ -420,11 +420,11 @@ def generate_results_classification(step, subject, segment_gap_s):
             df_prev_overall = (df_prevalence_correction.groupby('segment_duration')['minutes'].sum() /
                                df_prevalence_correction['minutes'].sum()).reset_index(name='prop_overall')
 
-            df_prev_specific = (df_prevalence_correction.groupby(['pre_or_post', 'segment_duration'])['minutes'].sum() / 
-                                df_prevalence_correction.groupby('pre_or_post')['minutes'].sum()).reset_index(name='prop_specific')
+            df_prev_specific = (df_prevalence_correction.groupby([gc.columns.PRE_OR_POST, 'segment_duration'])['minutes'].sum() / 
+                                df_prevalence_correction.groupby(gc.columns.PRE_OR_POST)['minutes'].sum()).reset_index(name='prop_specific')
 
             # Merge prevalence data back into df_prevalence_correction
-            df_prevalence_correction = pd.merge(left=df_prevalence_correction, right=df_prev_specific, how='left', on=['pre_or_post', 'segment_duration'])
+            df_prevalence_correction = pd.merge(left=df_prevalence_correction, right=df_prev_specific, how='left', on=[gc.columns.PRE_OR_POST, 'segment_duration'])
             df_prevalence_correction = pd.merge(left=df_prevalence_correction, right=df_prev_overall, how='left', on='segment_duration')            
 
             # Calculate total prevalence of each segment duration across medication stages
@@ -435,7 +435,7 @@ def generate_results_classification(step, subject, segment_gap_s):
 
             # Loop through each medication stage to calculate corrected specificity
             for med_stage in df_side[gc.columns.PRE_OR_POST].unique():
-                df_med_stage_corrected = df_prevalence_correction.loc[df_prevalence_correction['pre_or_post'] == med_stage].copy()
+                df_med_stage_corrected = df_prevalence_correction.loc[df_prevalence_correction[gc.columns.PRE_OR_POST] == med_stage].copy()
                 df_med_stage_corrected['segment_duration'] = pd.Categorical(df_med_stage_corrected['segment_duration'], custom_order_segments)
                 df_med_stage_corrected = df_med_stage_corrected.sort_values(by='segment_duration').reset_index(drop=True)
 
