@@ -263,7 +263,7 @@ def generate_results_classification(step, subject, segment_gap_s):
         if subject in gc.participant_ids.L_PD_IDS:
             l_raw_cols += [gc.columns.ARM_LABEL, gc.columns.PRE_OR_POST]
 
-        if subject in gc.participant_ids.L_TREMOR_IDS:
+        if subject in gc.participant_ids.L_TREMOR_IDS and step == 'gait':
             l_raw_cols.append(gc.columns.TREMOR_LABEL)
         
         # Predictions
@@ -401,7 +401,7 @@ def generate_results_classification(step, subject, segment_gap_s):
                         }
 
                 # effect of tremor on specificity
-                if subject in gc.participant_ids.L_TREMOR_IDS:
+                if subject in gc.participant_ids.L_TREMOR_IDS and step == 'gait':
 
                     df_med_stage['tremor_label_binned'] = df_med_stage[gc.columns.TREMOR_LABEL].apply(
                         lambda x: 'tremor' if x in ['Slight or mild tremor', 'Moderate tremor', 'Severe tremor', 'Tremor with significant upper limb activity'] else
