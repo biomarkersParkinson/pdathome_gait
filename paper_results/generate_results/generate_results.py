@@ -32,7 +32,7 @@ if __name__ == '__main__':
     nproc = int(sys.argv[1])  # Number of parallel processes
     l_ids = sys.argv[2:]      # List of ids to process
 
-    l_steps = ['gait']
+    l_steps = ['gait', 'arm_activity', 'quantification']
 
     for step in l_steps:
         parallelize_function(nproc, l_ids, step)
