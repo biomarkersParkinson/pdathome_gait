@@ -12,6 +12,7 @@ from scipy.stats import wilcoxon, ranksums
 from sklearn.metrics import roc_curve, auc
 
 from pdathome.constants import global_constants as gc, mappings as mp
+from pdathome.preprocessing import add_annotated_gait_segment_category
 from pdathome.quantification import compute_aggregations, compute_effect_size
 
 def calculate_metric(df, pred_colname, true_colname, metric, pred_proba_colname=None):
@@ -249,7 +250,7 @@ def generate_results_classification(step, subject, segment_gap_s):
 
             # Metrics
             metric_to_correct = 'spec'
-            arm_label_metric = 'spec'
+            arm_label_metric = 'sens'
 
             # Values
             outcome_value = 0 # No other arm activity
@@ -274,36 +275,7 @@ def generate_results_classification(step, subject, segment_gap_s):
         for side in [gc.descriptives.MOST_AFFECTED_SIDE, gc.descriptives.LEAST_AFFECTED_SIDE]:
             df_raw = pd.read_pickle(os.path.join(gc.paths.PATH_PREPARED_DATA, f'{subject}_{side}.pkl')).assign(side=side)
 
-            # Create segments based on video-annotations of gait
-            walking_segments = create_segments(
-                df=df_raw.loc[df_raw[gc.columns.FREE_LIVING_LABEL] == 'Walking'],
-                time_column_name=gc.columns.TIME,
-                gap_threshold_s=segment_gap_s
-            )
-
-            # Assign segment numbers to the raw data
-            df_raw.loc[df_raw[gc.columns.FREE_LIVING_LABEL] == 'Walking', gc.columns.TRUE_GAIT_SEGMENT_NR] = walking_segments
-
-            # Non-gait raw data is assigned a segment number of -1
-            df_raw[gc.columns.TRUE_GAIT_SEGMENT_NR] = df_raw[gc.columns.TRUE_GAIT_SEGMENT_NR].fillna(-1)
-
-            # Map categories to segments of video-annotated gait
-            walking_segments_cat = categorize_segments(
-                df=df_raw.loc[(df_raw[gc.columns.FREE_LIVING_LABEL] == 'Walking') & (df_raw[gc.columns.TRUE_GAIT_SEGMENT_NR] != -1)],
-                segment_nr_colname=gc.columns.TRUE_GAIT_SEGMENT_NR,
-                sampling_frequency=gc.parameters.DOWNSAMPLED_FREQUENCY
-            )
-
-            # Assign segment categories to the raw data
-            df_raw.loc[(df_raw[gc.columns.FREE_LIVING_LABEL] == 'Walking') & (df_raw[gc.columns.TRUE_GAIT_SEGMENT_NR] != -1), gc.columns.TRUE_GAIT_SEGMENT_CAT] = walking_segments_cat
-
-            # Non-gait raw data is assigned a segment category of -1
-            df_raw[gc.columns.TRUE_GAIT_SEGMENT_CAT] = df_raw[gc.columns.TRUE_GAIT_SEGMENT_CAT].fillna(-1)
-
-            # Map segment categories to segments of video-annotated gait
-            df_raw[gc.columns.TRUE_GAIT_SEGMENT_CAT] = df_raw[gc.columns.TRUE_GAIT_SEGMENT_CAT].apply(
-                    lambda x: mp.segment_map[x]
-                )
+            df_raw = add_annotated_gait_segment_category(df=df_raw, activity_colname=gc.columns.FREE_LIVING_LABEL, time_colname=gc.columns.TIME, segment_gap_s=segment_gap_s, gait_value='Walking')
 
             l_dfs.append(df_raw)
 
@@ -317,14 +289,27 @@ def generate_results_classification(step, subject, segment_gap_s):
         df.loc[df[pred_proba_colname] < clf_threshold, pred_colname] = 0
 
         # Set boolean for label (ground truth)
-        df.loc[df[label_colname] == value_label, boolean_colname] = outcome_value
-        df.loc[df[label_colname] != value_label, boolean_colname] = 1 - outcome_value
+        if not (subject in gc.participant_ids.L_HC_IDS and step == 'arm_activity'):
+            df.loc[df[label_colname] == value_label, boolean_colname] = outcome_value
+            df.loc[df[label_colname] != value_label, boolean_colname] = 1 - outcome_value
 
         if subject in gc.participant_ids.L_PD_IDS:
             df.loc[df[gc.columns.ARM_LABEL]=='Holding an object behind ', gc.columns.ARM_LABEL] = 'Holding an object behind'
             df[gc.columns.ARM_LABEL] = df.loc[~df[gc.columns.ARM_LABEL].isna(), gc.columns.ARM_LABEL].apply(lambda x: mp.arm_labels_rename[x])
         else:
             df[gc.columns.PRE_OR_POST] = gc.descriptives.CONTROLS
+     
+        # statistics per arm activity
+        if subject in gc.participant_ids.L_PD_IDS:
+            d_performance[model]['arm_activities'] = {}
+
+            for arm_label in df[gc.columns.ARM_LABEL].unique():
+                df_arm_activity = df.loc[df[gc.columns.ARM_LABEL]==arm_label]
+
+                d_performance[model]['arm_activities'][arm_label] = {
+                    'mins': df_arm_activity.shape[0]/gc.parameters.DOWNSAMPLED_FREQUENCY/60,
+                    arm_label_metric: calculate_metric(df=df_arm_activity, pred_colname=pred_colname, true_colname=boolean_colname, metric=arm_label_metric)
+                }
             
         # make segments and segment duration categories
         for affected_side in [gc.descriptives.MOST_AFFECTED_SIDE, gc.descriptives.LEAST_AFFECTED_SIDE]:
@@ -333,49 +318,65 @@ def generate_results_classification(step, subject, segment_gap_s):
 
             prevalence_data = []
             for med_stage in df_side[gc.columns.PRE_OR_POST].unique():
+                d_performance[model][affected_side][med_stage] = {}
                 df_med_stage = df_side.loc[df_side[gc.columns.PRE_OR_POST]==med_stage].copy()
 
-                seconds_true = df_med_stage.loc[df_med_stage[boolean_colname]==1].shape[0] / gc.parameters.DOWNSAMPLED_FREQUENCY
-                seconds_false = df_med_stage.loc[df_med_stage[boolean_colname]==0].shape[0] / gc.parameters.DOWNSAMPLED_FREQUENCY
+                pred_seconds_true = df_med_stage.loc[df_med_stage[pred_colname]==outcome_value].shape[0] / gc.parameters.DOWNSAMPLED_FREQUENCY
+                pred_seconds_false = df_med_stage.loc[df_med_stage[pred_colname]==1-outcome_value].shape[0] / gc.parameters.DOWNSAMPLED_FREQUENCY
 
-                d_performance[model][affected_side][med_stage] = {'size': {f'{boolean_colname}_s': seconds_true,
-                                                                        f'non_{boolean_colname}_s': seconds_false}}
-                for metric in ['sens', 'spec', 'auc']:
-                    d_performance[model][affected_side][med_stage][metric] = calculate_metric(
-                        df=df_med_stage, pred_colname=pred_colname, pred_proba_colname=pred_proba_colname,
-                        true_colname=boolean_colname, metric=metric)
+                d_performance[model][affected_side][med_stage]['size'] = {
+                    f'pred_{boolean_colname}_s': pred_seconds_true,
+                    f'pred_no_{boolean_colname}_s': pred_seconds_false,
+                }
+
+                if not (subject in gc.participant_ids.L_HC_IDS and step == 'arm_activity'):
+                    ann_seconds_true = df_med_stage.loc[df_med_stage[boolean_colname]==outcome_value].shape[0] / gc.parameters.DOWNSAMPLED_FREQUENCY
+                    ann_seconds_false = df_med_stage.loc[df_med_stage[boolean_colname]==1-outcome_value].shape[0] / gc.parameters.DOWNSAMPLED_FREQUENCY
+
+                    d_performance[model][affected_side][med_stage]['size'][f'ann_{boolean_colname}_s'] = ann_seconds_true
+                    d_performance[model][affected_side][med_stage]['size'][f'ann_no_{boolean_colname}_s'] = ann_seconds_false
+
+                    for metric in ['sens', 'spec', 'auc']:
+                        d_performance[model][affected_side][med_stage][metric] = calculate_metric(
+                            df=df_med_stage, pred_colname=pred_colname, pred_proba_colname=pred_proba_colname,
+                            true_colname=boolean_colname, metric=metric)
 
                 # minutes of data per med stage, per affected side, per segment duration category
                 d_performance[model][affected_side][med_stage]['segment_duration'] = {}
-                for segment_duration in [x for x in df_med_stage[gc.columns.TRUE_GAIT_SEGMENT_CAT].unique() if x != 'non_gait']:
+                for segment_duration in df_med_stage[gc.columns.TRUE_GAIT_SEGMENT_CAT].unique():
+                    d_performance[model][affected_side][med_stage]['segment_duration'][segment_duration] = {}
                     df_segments_cat = df_med_stage.loc[df_med_stage[gc.columns.TRUE_GAIT_SEGMENT_CAT] == segment_duration]
 
-                    cat_minutes = df_segments_cat.loc[df_segments_cat[boolean_colname] == outcome_value].shape[0] / gc.parameters.DOWNSAMPLED_FREQUENCY / 60
-                    
-                    d_performance[model][affected_side][med_stage]['segment_duration'][segment_duration] = {'minutes': cat_minutes}
+                    cat_minutes_pred = df_segments_cat.loc[df_segments_cat[pred_colname] == outcome_value].shape[0] / gc.parameters.DOWNSAMPLED_FREQUENCY / 60
+                    d_performance[model][affected_side][med_stage]['segment_duration'][segment_duration]['minutes_pred'] = cat_minutes_pred
 
-                    for metric in ['sens', 'spec']:
-                        d_performance[model][affected_side][med_stage]['segment_duration'][segment_duration][metric] = calculate_metric(
-                            df=df_segments_cat, pred_colname=pred_colname, true_colname=boolean_colname, metric=metric)
+                    if not (subject in gc.participant_ids.L_HC_IDS and step == 'arm_activity'):
+                        cat_minutes_true = df_segments_cat.loc[df_segments_cat[boolean_colname] == outcome_value].shape[0] / gc.parameters.DOWNSAMPLED_FREQUENCY / 60
+                        d_performance[model][affected_side][med_stage]['segment_duration'][segment_duration]['minutes_true'] = cat_minutes_true
 
-                    # Append to prevalence_data list
-                    prevalence_data.append({
-                        'minutes': cat_minutes,
-                        metric_to_correct: d_performance[model][affected_side][med_stage]['segment_duration'][segment_duration][metric_to_correct],
-                        'segment_duration': segment_duration,
-                        gc.columns.PRE_OR_POST: med_stage
-                    })
+                        if segment_duration != 'non_gait':
+                            for metric in ['sens', 'spec']:
+                                d_performance[model][affected_side][med_stage]['segment_duration'][segment_duration][metric] = calculate_metric(
+                                    df=df_segments_cat, pred_colname=pred_colname, true_colname=boolean_colname, metric=metric)
 
-                    if subject in gc.participant_ids.L_PD_IDS:
-                        d_performance[model][affected_side][med_stage]['segment_duration'][segment_duration]['arm_activities'] = {}
+                            # Append to prevalence_data list
+                            prevalence_data.append({
+                                'minutes': cat_minutes_true,
+                                metric_to_correct: d_performance[model][affected_side][med_stage]['segment_duration'][segment_duration][metric_to_correct],
+                                'segment_duration': segment_duration,
+                                gc.columns.PRE_OR_POST: med_stage
+                            })
 
-                        for arm_label in df_segments_cat[gc.columns.ARM_LABEL].unique():
-                            df_arm_activity = df_segments_cat.loc[df_segments_cat[gc.columns.ARM_LABEL]==arm_label]
+                            if subject in gc.participant_ids.L_PD_IDS:
+                                d_performance[model][affected_side][med_stage]['segment_duration'][segment_duration]['arm_activities'] = {}
 
-                            d_performance[model][affected_side][med_stage]['segment_duration'][segment_duration]['arm_activities'][arm_label] = {
-                                'minutes': df_arm_activity.shape[0]/gc.parameters.DOWNSAMPLED_FREQUENCY/60,
-                                arm_label_metric: calculate_metric(df=df_arm_activity, pred_colname=pred_colname, true_colname=boolean_colname, metric=arm_label_metric)
-                            }
+                                for arm_label in df_segments_cat[gc.columns.ARM_LABEL].unique():
+                                    df_arm_activity = df_segments_cat.loc[df_segments_cat[gc.columns.ARM_LABEL]==arm_label]
+
+                                    d_performance[model][affected_side][med_stage]['segment_duration'][segment_duration]['arm_activities'][arm_label] = {
+                                        'minutes': df_arm_activity.shape[0]/gc.parameters.DOWNSAMPLED_FREQUENCY/60,
+                                        arm_label_metric: calculate_metric(df=df_arm_activity, pred_colname=pred_colname, true_colname=boolean_colname, metric=arm_label_metric)
+                                    }
 
                 # minutes of data per activity of mas
                 if step == 'gait': 
@@ -413,43 +414,44 @@ def generate_results_classification(step, subject, segment_gap_s):
                     for tremor_type in [x for x in df_med_stage['tremor_label_binned'].unique() if not pd.isna(x)]:
                         d_performance[model][affected_side][med_stage][f'{tremor_type}_spec'] = calculate_spec(df=df_med_stage.loc[df_med_stage['tremor_label_binned']==tremor_type], pred_colname=pred_colname, true_colname=boolean_colname)
                 
-            # Convert prevalence data into a DataFrame outside of the loop
-            df_prevalence_correction = pd.DataFrame(prevalence_data)
+            if not (subject in gc.participant_ids.L_HC_IDS and step == 'arm_activity'):
+                # Convert prevalence data into a DataFrame outside of the loop
+                df_prevalence_correction = pd.DataFrame(prevalence_data)
 
-            # Calculate prevalence proportions overall and per medication stage
-            df_prev_overall = (df_prevalence_correction.groupby('segment_duration')['minutes'].sum() /
-                               df_prevalence_correction['minutes'].sum()).reset_index(name='prop_overall')
+                # Calculate prevalence proportions overall and per medication stage
+                df_prev_overall = (df_prevalence_correction.groupby('segment_duration')['minutes'].sum() /
+                                df_prevalence_correction['minutes'].sum()).reset_index(name='prop_overall')
 
-            df_prev_specific = (df_prevalence_correction.groupby([gc.columns.PRE_OR_POST, 'segment_duration'])['minutes'].sum() / 
-                                df_prevalence_correction.groupby(gc.columns.PRE_OR_POST)['minutes'].sum()).reset_index(name='prop_specific')
+                df_prev_specific = (df_prevalence_correction.groupby([gc.columns.PRE_OR_POST, 'segment_duration'])['minutes'].sum() / 
+                                    df_prevalence_correction.groupby(gc.columns.PRE_OR_POST)['minutes'].sum()).reset_index(name='prop_specific')
 
-            # Merge prevalence data back into df_prevalence_correction
-            df_prevalence_correction = pd.merge(left=df_prevalence_correction, right=df_prev_specific, how='left', on=[gc.columns.PRE_OR_POST, 'segment_duration'])
-            df_prevalence_correction = pd.merge(left=df_prevalence_correction, right=df_prev_overall, how='left', on='segment_duration')            
+                # Merge prevalence data back into df_prevalence_correction
+                df_prevalence_correction = pd.merge(left=df_prevalence_correction, right=df_prev_specific, how='left', on=[gc.columns.PRE_OR_POST, 'segment_duration'])
+                df_prevalence_correction = pd.merge(left=df_prevalence_correction, right=df_prev_overall, how='left', on='segment_duration')            
 
-            # Calculate total prevalence of each segment duration across medication stages
-            total_prevalence = df_prevalence_correction.groupby('segment_duration')['minutes'].sum()	
+                # Calculate total prevalence of each segment duration across medication stages
+                total_prevalence = df_prevalence_correction.groupby('segment_duration')['minutes'].sum()	
 
-            # Normalize to get proportions for each segment duration
-            total_prevalence_proportions = total_prevalence / total_prevalence.sum()          
+                # Normalize to get proportions for each segment duration
+                total_prevalence_proportions = total_prevalence / total_prevalence.sum()          
 
-            # Loop through each medication stage to calculate corrected specificity
-            for med_stage in df_side[gc.columns.PRE_OR_POST].unique():
-                df_med_stage_corrected = df_prevalence_correction.loc[df_prevalence_correction[gc.columns.PRE_OR_POST] == med_stage].copy()
-                df_med_stage_corrected['segment_duration'] = pd.Categorical(df_med_stage_corrected['segment_duration'], custom_order_segments)
-                df_med_stage_corrected = df_med_stage_corrected.sort_values(by='segment_duration').reset_index(drop=True)
+                # Loop through each medication stage to calculate corrected specificity
+                for med_stage in df_side[gc.columns.PRE_OR_POST].unique():
+                    df_med_stage_corrected = df_prevalence_correction.loc[df_prevalence_correction[gc.columns.PRE_OR_POST] == med_stage].copy()
+                    df_med_stage_corrected['segment_duration'] = pd.Categorical(df_med_stage_corrected['segment_duration'], custom_order_segments)
+                    df_med_stage_corrected = df_med_stage_corrected.sort_values(by='segment_duration').reset_index(drop=True)
 
-                # Safeguard to avoid missing data or incorrect indexing
-                if not df_med_stage_corrected.empty:
-                    metric_values = df_med_stage_corrected[metric_to_correct]
+                    # Safeguard to avoid missing data or incorrect indexing
+                    if not df_med_stage_corrected.empty:
+                        metric_values = df_med_stage_corrected[metric_to_correct]
 
-                    # Calculate the weighted sensitivity using the proportions
-                    weighted_sensitivity = metric_values * total_prevalence_proportions.loc[df_med_stage_corrected['segment_duration']].values
+                        # Calculate the weighted sensitivity using the proportions
+                        weighted_sensitivity = metric_values * total_prevalence_proportions.loc[df_med_stage_corrected['segment_duration']].values
 
-                    # Sum the weighted sensitivities to get a single corrected sensitivity
-                    metric_corrected = weighted_sensitivity.sum()
+                        # Sum the weighted sensitivities to get a single corrected sensitivity
+                        metric_corrected = weighted_sensitivity.sum()
 
-                    d_performance[model][affected_side][med_stage][f'{metric_to_correct}_corrected'] = metric_corrected
+                        d_performance[model][affected_side][med_stage][f'{metric_to_correct}_corrected'] = metric_corrected
 
     return d_performance
 
@@ -471,7 +473,50 @@ def generate_results_quantification(subject: str) -> tuple[dict, pd.DataFrame]:
     """Generate quantification results for a given subject."""
     classification_threshold = 0.5
 
-    # Load arm activity features for both sides
+    # Load timestamps for both sides
+    df_ts_mas = load_arm_activity_timestamps(subject, gc.descriptives.MOST_AFFECTED_SIDE)
+    df_ts_las = load_arm_activity_timestamps(subject, gc.descriptives.LEAST_AFFECTED_SIDE)
+
+    df_ts = pd.concat([df_ts_mas, df_ts_las], axis=0).reset_index(drop=True)
+
+    # Explode the timestamps DataFrame
+    df_ts_exploded = df_ts.explode(gc.columns.TIME)
+
+    # Load arm activity predictions
+    df_predictions = pd.read_pickle(os.path.join(gc.paths.PATH_ARM_ACTIVITY_PREDICTIONS, gc.classifiers.LOGISTIC_REGRESSION, f'{subject}.pkl'))
+
+    # Set pred rounded based on the threshold
+    df_predictions[gc.columns.PRED_OTHER_ARM_ACTIVITY] = (df_predictions[gc.columns.PRED_OTHER_ARM_ACTIVITY_PROBA] >= classification_threshold).astype(int)
+
+    # Add predictions to raw data
+    df = pd.merge(
+        left=df_predictions, 
+        right=df_ts_exploded, 
+        how='left', 
+        on=[gc.columns.TIME, gc.columns.SIDE]
+    )
+
+    df_raw_mas = pd.read_pickle(os.path.join(gc.paths.PATH_PREPARED_DATA, f'{subject}_{gc.descriptives.MOST_AFFECTED_SIDE}.pkl')).assign(side=gc.descriptives.MOST_AFFECTED_SIDE)
+    df_raw_las = pd.read_pickle(os.path.join(gc.paths.PATH_PREPARED_DATA, f'{subject}_{gc.descriptives.LEAST_AFFECTED_SIDE}.pkl')).assign(side=gc.descriptives.LEAST_AFFECTED_SIDE)
+    df_raw = pd.concat([df_raw_mas, df_raw_las], axis=0).reset_index(drop=True)
+
+    df_raw = add_annotated_gait_segment_category(df=df_raw, time_colname=gc.columns.TIME, activity_colname=gc.columns.FREE_LIVING_LABEL, segment_gap_s=gc.parameters.SEGMENT_GAP_GAIT, gait_value='Walking')
+
+    # Merge annotations
+    df = pd.merge(left=df, right=df_raw[[
+        gc.columns.TIME, gc.columns.PRE_OR_POST, gc.columns.SIDE, gc.columns.FREE_LIVING_LABEL, 
+        gc.columns.ARM_LABEL, gc.columns.TRUE_GAIT_SEGMENT_NR, gc.columns.TRUE_GAIT_SEGMENT_CAT
+        ]],
+        how='left', on=[gc.columns.TIME, gc.columns.SIDE]
+    )
+
+    # Set other arm activity boolean
+    df.loc[df[gc.columns.ARM_LABEL]=='Gait without other behaviours or other positions', 'other_arm_activity_boolean'] = 0
+    df.loc[df[gc.columns.ARM_LABEL]!='Gait without other behaviours or other positions', 'other_arm_activity_boolean'] = 1
+    df.loc[df[gc.columns.ARM_LABEL]=='Holding an object behind ', gc.columns.ARM_LABEL] = 'Holding an object behind'
+    df[gc.columns.ARM_LABEL] = df.loc[~df[gc.columns.ARM_LABEL].isna(), gc.columns.ARM_LABEL].apply(lambda x: mp.arm_labels_rename[x])
+
+     # Load arm activity features for both sides
     df_features_mas = load_arm_activity_features(subject, gc.descriptives.MOST_AFFECTED_SIDE)
     df_features_las = load_arm_activity_features(subject, gc.descriptives.LEAST_AFFECTED_SIDE)
 
@@ -480,60 +525,21 @@ def generate_results_quantification(subject: str) -> tuple[dict, pd.DataFrame]:
     df_features['peak_velocity'] = (df_features['forward_peak_ang_vel_mean'] + df_features['backward_peak_ang_vel_mean']) / 2
     df_features = df_features.drop(columns=[gc.columns.TIME])
 
-    # Load timestamps for both sides
-    df_ts_mas = load_arm_activity_timestamps(subject, gc.descriptives.MOST_AFFECTED_SIDE)
-    df_ts_las = load_arm_activity_timestamps(subject, gc.descriptives.LEAST_AFFECTED_SIDE)
-
-    df_ts = pd.concat([df_ts_mas, df_ts_las], axis=0).reset_index(drop=True)
-
-    # Explode the timestamps DataFrame
-    df_ts_exploded = df_ts.explode([
-        gc.columns.TIME, gc.columns.ARM_LABEL, gc.columns.TRUE_GAIT_SEGMENT_NR,
-        gc.columns.TRUE_GAIT_SEGMENT_CAT, gc.columns.FREE_LIVING_LABEL
-        ]
-    )
-    
     # Merge features with exploded timestamps
-    df_features = pd.merge(
+    df = pd.merge(
         left=df_features, 
-        right=df_ts_exploded, 
+        right=df, 
         how='right', 
-        on=[
-            gc.columns.SIDE, gc.columns.PRE_OR_POST, gc.columns.PRED_GAIT_SEGMENT_NR,
-            gc.columns.WINDOW_NR
-        ]
+        on=[gc.columns.SIDE, gc.columns.PRE_OR_POST, gc.columns.WINDOW_NR]
     )
     
     # Group by relevant columns and compute mean for features
-    df_features = df_features.groupby([
-        gc.columns.SIDE, gc.columns.TIME, gc.columns.PRED_GAIT_SEGMENT_NR,
-        gc.columns.PRED_GAIT_SEGMENT_CAT, gc.columns.TRUE_GAIT_SEGMENT_CAT,
-        gc.columns.PRE_OR_POST
-        ]
+    df = df.groupby([
+        gc.columns.SIDE, gc.columns.TIME,
+        gc.columns.WINDOW_NR, gc.columns.PRE_OR_POST,
+        gc.columns.TRUE_GAIT_SEGMENT_CAT, gc.columns.PRED_OTHER_ARM_ACTIVITY,
+        'other_arm_activity_boolean']
     )[['peak_velocity', 'range_of_motion']].mean().reset_index()
-
-    # Load arm activity predictions
-    df_predictions = pd.read_pickle(os.path.join(gc.paths.PATH_ARM_ACTIVITY_PREDICTIONS, gc.classifiers.LOGISTIC_REGRESSION, f'{subject}.pkl'))
-
-    # Set pred rounded based on the threshold
-    df_predictions[gc.columns.PRED_OTHER_ARM_ACTIVITY] = (df_predictions[gc.columns.PRED_OTHER_ARM_ACTIVITY_PROBA] >= classification_threshold).astype(int)
-
-    # Set other arm activity boolean
-    df_predictions.loc[df_predictions[gc.columns.ARM_LABEL]=='Gait without other behaviours or other positions', 'other_arm_activity_boolean'] = 0
-    df_predictions.loc[df_predictions[gc.columns.ARM_LABEL]!='Gait without other behaviours or other positions', 'other_arm_activity_boolean'] = 1
-    df_predictions.loc[df_predictions[gc.columns.ARM_LABEL]=='Holding an object behind ', gc.columns.ARM_LABEL] = 'Holding an object behind'
-    df_predictions[gc.columns.ARM_LABEL] = df_predictions.loc[~df_predictions[gc.columns.ARM_LABEL].isna(), gc.columns.ARM_LABEL].apply(lambda x: mp.arm_labels_rename[x])
-
-    # Merge predictions with features
-    df = pd.merge(
-        left=df_predictions, 
-        right=df_features, 
-        how='left', 
-        on=[
-            gc.columns.TIME, gc.columns.PRE_OR_POST, gc.columns.SIDE, 
-            gc.columns.PRED_GAIT_SEGMENT_NR, gc.columns.PRED_GAIT_SEGMENT_CAT
-        ]
-    )
 
     d_quantification = {}
 
@@ -559,7 +565,7 @@ def generate_results_quantification(subject: str) -> tuple[dict, pd.DataFrame]:
         for dataset in diff_mrom.keys():
             df_diff = pd.concat([df_diff, pd.DataFrame([subject, dataset, diff_mrom[dataset], diff_prom[dataset]]).T])
 
-        df_diff.columns = ['id', 'dataset', 'diff_median_rom', 'diff_95p_rom']
+        df_diff.columns = [gc.columns.ID, 'dataset', 'diff_median_rom', 'diff_95p_rom']
         return d_quantification, df_diff
     else:
         return d_quantification
@@ -569,8 +575,6 @@ def generate_results(subject, step):
     if step not in ['gait', 'arm_activity', 'quantification']:
         raise ValueError(f"Invalid step: {step}")
 
-    if subject in gc.participant_ids.L_HC_IDS and step == 'arm_activity':
-        return
     
     if step in ['gait', 'arm_activity']:
         print(f"Processing {subject} - {step}...")

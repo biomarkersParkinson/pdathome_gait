@@ -254,6 +254,20 @@ global_constants = GlobalConstants(
     plot_parameters=PlotParameters() 
 )
 
+metric_map = {
+    'sens': 'Sensitivity',
+    'spec': 'Specificity',
+    'acc': 'Accuracy',
+    'bacc': 'Balanced accuracy',
+}
+
+arm_swing_parameter_map = {
+    'range_of_motion_median': 'Median range of motion [deg]',
+    'range_of_motion_quantile_95': '95th percentile range of motion [deg]',
+    'peak_velocity_median': 'Median peak velocity [deg/s]',
+    'peak_velocity_quantile_95': '95th percentile peak velocity [deg/s]',
+}
+
 activity_map = {
     'Lie-to-sit': 'Transitioning',
     'Lie-to-stand': 'Transitioning',
@@ -552,6 +566,8 @@ d_updrs_scoring_map = {
 
 @dataclass(frozen=True)
 class Mappings:
+    arm_swing_parameter_map: dict
+    metric_map: dict
     activity_map: dict
     segment_map: dict
     segment_rename: dict
@@ -562,6 +578,8 @@ class Mappings:
     d_updrs_scoring_map: dict
 
 mappings = Mappings(
+    arm_swing_parameter_map = arm_swing_parameter_map,
+    metric_map = metric_map,
     activity_map = activity_map,
     segment_map = segment_map,
     segment_rename = segment_rename,

@@ -573,3 +573,38 @@ def arm_label_majority_voting(config, arm_label):
     if non_nan_count > config.window_length_s * gc.parameters.DOWNSAMPLED_FREQUENCY / 2:
         return Counter(arm_label).most_common(1)[0][0]
     return np.nan
+
+
+def add_annotated_gait_segment_category(df, activity_colname, time_colname, segment_gap_s, gait_value):
+    # Create segments based on video-annotations of gait
+    walking_segments = create_segments(
+        df=df.loc[df[activity_colname] == gait_value],
+        time_column_name=time_colname,
+        gap_threshold_s=segment_gap_s
+    )
+
+    # Assign segment numbers to the raw data
+    df.loc[df[activity_colname] == gait_value, gc.columns.TRUE_GAIT_SEGMENT_NR] = walking_segments
+
+    # Non-gait raw data is assigned a segment number of -1
+    df[gc.columns.TRUE_GAIT_SEGMENT_NR] = df[gc.columns.TRUE_GAIT_SEGMENT_NR].fillna(-1)
+
+    # Map categories to segments of video-annotated gait
+    walking_segments_cat = categorize_segments(
+        df=df.loc[(df[gc.columns.FREE_LIVING_LABEL] == gait_value) & (df[gc.columns.TRUE_GAIT_SEGMENT_NR] != -1)],
+        segment_nr_colname=gc.columns.TRUE_GAIT_SEGMENT_NR,
+        sampling_frequency=gc.parameters.DOWNSAMPLED_FREQUENCY
+    )
+
+    # Assign segment categories to the raw data
+    df.loc[(df[activity_colname] == gait_value) & (df[gc.columns.TRUE_GAIT_SEGMENT_NR] != -1), gc.columns.TRUE_GAIT_SEGMENT_CAT] = walking_segments_cat
+
+    # Non-gait raw data is assigned a segment category of -1
+    df[gc.columns.TRUE_GAIT_SEGMENT_CAT] = df[gc.columns.TRUE_GAIT_SEGMENT_CAT].fillna(-1)
+
+    # Map segment categories to segments of video-annotated gait
+    df[gc.columns.TRUE_GAIT_SEGMENT_CAT] = df[gc.columns.TRUE_GAIT_SEGMENT_CAT].apply(
+            lambda x: mp.segment_map[x]
+        )
+    
+    return df
