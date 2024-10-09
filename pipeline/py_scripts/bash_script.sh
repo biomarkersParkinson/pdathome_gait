@@ -16,7 +16,7 @@ source $(poetry env info --path)/bin/activate
 
 # Run the program
 nproc=8
-steps=567
+steps=67
 input_ids=$(cat ../../id_files/all.txt)
 
 python -u run_pipeline.py $nproc $steps $input_ids
