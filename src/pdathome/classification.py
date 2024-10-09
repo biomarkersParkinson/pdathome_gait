@@ -30,7 +30,8 @@ def train_test(
     step: str,
     path_features: str,
     path_predictions: str,
-    n_jobs: int
+    threshold_method: str = None,
+    n_jobs: int = -1,
 ):
     # Initialize configuration
     config = config_class()
@@ -56,6 +57,7 @@ def train_test(
             target_column_name=target_column_name,
             pred_proba_colname=pred_proba_colname,
             n_jobs=n_jobs,
+            threshold_method=threshold_method,
             step=step,
         )
 
@@ -101,12 +103,13 @@ def train_test_filtering_gait(subject, l_classifiers, n_jobs=-1):
             step='arm_activity',
             path_features=gc.paths.PATH_ARM_ACTIVITY_FEATURES,
             path_predictions=gc.paths.PATH_ARM_ACTIVITY_PREDICTIONS,
+            threshold_method='min_diff',
             n_jobs=n_jobs
         )
 
 
 def cv_train_test_model(subject, df, classifier_name, l_predictors, l_predictors_scale, target_column_name, 
-                        pred_proba_colname, step, n_jobs=-1):
+                        pred_proba_colname, step, threshold_method=None, n_jobs=-1):
 
     # Check for valid step
     if step not in ['gait', 'arm_activity']:
@@ -166,7 +169,22 @@ def cv_train_test_model(subject, df, classifier_name, l_predictors, l_predictors
         threshold_index = np.argmax(fpr >= 0.05) - 1
         classification_threshold = thresholds[threshold_index]
     else:
-        classification_threshold = 0.5
+        fpr, tpr, thresholds = roc_curve(y_true=df_train[l_predictors], y_score=df_train[pred_proba_colname], pos_label=1)
+        spec = 1 - fpr
+
+        if threshold_method == 'youden': 
+            # Youden's Index
+            youden_index = tpr + spec - 1
+            threshold_index = np.argmax(youden_index)
+            classification_threshold = thresholds[threshold_index]
+
+        elif threshold_method == 'min_diff':
+            # Minimizing difference between sens and spec
+            diff = np.abs(tpr - spec)
+            threshold_index = np.argmin(diff)
+            classification_threshold = thresholds[threshold_index]
+        else:
+            classification_threshold = 0.5
     
     return df_test, classification_threshold
 
