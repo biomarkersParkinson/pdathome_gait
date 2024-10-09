@@ -155,6 +155,8 @@ def cv_train_test_model(subject, df, classifier_name, l_predictors, l_predictors
 
     # Predict probabilities on the test set
     df_test['true'] = y_test
+
+    df_train[pred_proba_colname] = clf.predict_proba(X_train)[:,1]
     df_test[pred_proba_colname] = clf.predict_proba(X_test)[:,1]
     
     # Threshold determination for 'gait' step
