@@ -69,9 +69,8 @@ def train_test(
             step=step
         )
 
-        if step == 'gait':
-            with open(os.path.join(gc.paths.PATH_THRESHOLDS, step, f'{classifier_name}_{subject}.txt'), 'w') as f:
-                f.write(str(classification_threshold))
+        with open(os.path.join(gc.paths.PATH_THRESHOLDS, step, f'{classifier_name}_{subject}.txt'), 'w') as f:
+            f.write(str(classification_threshold))
 
 
 def train_test_gait_detection(subject, l_classifiers, n_jobs=-1):
@@ -177,7 +176,6 @@ def cv_train_test_model(subject, df, classifier_name, l_predictors, l_predictors
             youden_index = tpr + spec - 1
             threshold_index = np.argmax(youden_index)
             classification_threshold = thresholds[threshold_index]
-
         elif threshold_method == 'min_diff':
             # Minimizing difference between sens and spec
             diff = np.abs(tpr - spec)
@@ -326,21 +324,22 @@ def store_model_output(df, classifier_name, step, n_jobs=-1):
 
     # Load individual thresholds and store the mean
     if step == 'gait':
-        thresholds = []
-        
-        l_ids = gc.participant_ids.L_PD_IDS + gc.participant_ids.L_HC_IDS
+         l_ids = gc.participant_ids.L_PD_IDS + gc.participant_ids.L_HC_IDS
+    else:
+        l_ids = gc.participant_ids.L_PD_IDS
 
-        for subject in l_ids:
-            with open(os.path.join(gc.paths.PATH_THRESHOLDS, step, f'{classifier_name}_{subject}.txt'), 'r') as f:
-                thresholds.append(float(f.read()))
+    thresholds = []
+    for subject in l_ids:
+        with open(os.path.join(gc.paths.PATH_THRESHOLDS, step, f'{classifier_name}_{subject}.txt'), 'r') as f:
+            thresholds.append(float(f.read()))
 
-        mean_threshold = np.mean(thresholds)
-        with open(os.path.join(gc.paths.PATH_THRESHOLDS, step, f'{classifier_name}.txt'), 'w') as f:
-            f.write(str(mean_threshold))
+    mean_threshold = np.mean(thresholds)
+    with open(os.path.join(gc.paths.PATH_THRESHOLDS, step, f'{classifier_name}.txt'), 'w') as f:
+        f.write(str(mean_threshold))
 
-        # Delete individual thresholds
-        for subject in l_ids:
-            os.remove(os.path.join(gc.paths.PATH_THRESHOLDS, step, f'{classifier_name}_{subject}.txt')) 
+    # Delete individual thresholds
+    for subject in l_ids:
+        os.remove(os.path.join(gc.paths.PATH_THRESHOLDS, step, f'{classifier_name}_{subject}.txt')) 
 
     if step == 'arm_activity':       
         # Predict arm activity for the controls
