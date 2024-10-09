@@ -170,7 +170,7 @@ def cv_train_test_model(subject, df, classifier_name, l_predictors, l_predictors
         threshold_index = np.argmax(fpr >= 0.05) - 1
         classification_threshold = thresholds[threshold_index]
     else:
-        fpr, tpr, thresholds = roc_curve(y_true=df_train[l_predictors], y_score=df_train[pred_proba_colname], pos_label=1)
+        fpr, tpr, thresholds = roc_curve(y_true=df_train[target_column_name], y_score=df_train[pred_proba_colname], pos_label=1)
         spec = 1 - fpr
 
         if threshold_method == 'youden': 
