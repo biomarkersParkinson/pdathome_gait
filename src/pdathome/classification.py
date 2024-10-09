@@ -102,7 +102,7 @@ def train_test_filtering_gait(subject, l_classifiers, n_jobs=-1):
             step='arm_activity',
             path_features=gc.paths.PATH_ARM_ACTIVITY_FEATURES,
             path_predictions=gc.paths.PATH_ARM_ACTIVITY_PREDICTIONS,
-            threshold_method='youden',
+            threshold_method='geometric',
             n_jobs=n_jobs
         )
 
@@ -182,6 +182,11 @@ def cv_train_test_model(subject, df, classifier_name, l_predictors, l_predictors
             # Minimizing difference between sens and spec
             diff = np.abs(tpr - spec)
             threshold_index = np.argmin(diff)
+            classification_threshold = thresholds[threshold_index]
+        elif threshold_method == 'geometric':
+            # Geometric mean
+            geometric_mean = np.sqrt(tpr * spec)
+            threshold_index = np.argmax(geometric_mean)
             classification_threshold = thresholds[threshold_index]
         else:
             classification_threshold = 0.5
