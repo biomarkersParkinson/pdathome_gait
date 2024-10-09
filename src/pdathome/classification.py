@@ -102,7 +102,7 @@ def train_test_filtering_gait(subject, l_classifiers, n_jobs=-1):
             step='arm_activity',
             path_features=gc.paths.PATH_ARM_ACTIVITY_FEATURES,
             path_predictions=gc.paths.PATH_ARM_ACTIVITY_PREDICTIONS,
-            threshold_method='geometric',
+            threshold_method='youden',
             n_jobs=n_jobs
         )
 
