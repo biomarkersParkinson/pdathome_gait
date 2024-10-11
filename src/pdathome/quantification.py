@@ -169,30 +169,48 @@ def compute_effect_size(df, parameter, stat):
     - d_effect_size (dict): Dictionary containing effect size information.
     - d_diffs (dict): Dictionary containing bootstrapped differences if applicable.
     """
-    df_copy = df.copy()
-    df_copy['dataset'] = 'Predicted gait'
+    # Get the counts of unique segment categories per window_nr
+    segment_counts = df.groupby(gc.columns.WINDOW_NR)[gc.columns.TRUE_GAIT_SEGMENT_CAT].nunique()
 
-    # Create predicted gait and annotated datasets
-    df_pred = df_copy.loc[(df_copy[gc.columns.PRED_OTHER_ARM_ACTIVITY] == 0)].copy()
-    df_pred['dataset'] = 'Predicted gait predicted NOAA'
+    # Filter to keep only window_nr values that have a single unique segment category
+    single_segment_windows = segment_counts[segment_counts == 1].index
 
-    df_ann = df_copy.loc[(df_copy['other_arm_activity_boolean'] == 0)].copy()
-    df_ann['dataset'] = 'Predicted gait annotated NOAA'
+    # Filter the original DataFrame to keep only the rows with those window numbers
+    filtered_df = df[df[gc.columns.WINDOW_NR].isin(single_segment_windows)]
 
-    # Combine the datasets
-    df_combined = pd.concat([df_copy, df_pred, df_ann], axis=0).reset_index(drop=True)
+    # df_copy = filtered_df.copy()
+    # df_copy['dataset'] = 'Predicted gait'
+
+    # # Create predicted gait and annotated datasets
+    # df_pred = df_copy.loc[(df_copy[gc.columns.PRED_OTHER_ARM_ACTIVITY] == 0)].copy()
+    # df_pred['dataset'] = 'Predicted gait predicted NOAA'
+
+    # df_ann = df_copy.loc[(df_copy['other_arm_activity_boolean'] == 0)].copy()
+    # df_ann['dataset'] = 'Predicted gait annotated NOAA'
+
+    # # Combine the datasets
+    # df_combined = pd.concat([df_copy, df_pred, df_ann], axis=0).reset_index(drop=True)
 
     d_effect_size = {}
     d_diffs = {}
 
-    for dataset in df_combined['dataset'].unique():
+    for dataset in ['predicted_gait', 'pred_gait_predicted_noaa', 'pred_gait_annotated_noaa']:
+        if dataset == 'predicted_gait':
+            df_subset = filtered_df.copy()
+        elif dataset == 'pred_gait_predicted_noaa':
+            df_subset = filtered_df.loc[filtered_df[gc.columns.PRED_OTHER_ARM_ACTIVITY] == 0].copy()
+        elif dataset == 'pred_gait_annotated_noaa':
+            df_subset = filtered_df.loc[filtered_df['other_arm_activity_boolean'] == 0].copy()
+        else:
+            raise ValueError("Invalid dataset provided.")
+
         d_effect_size[dataset] = {}
 
         # Split into pre-med and post-med
-        df_pre = df_combined.loc[(df_combined['dataset'] == dataset) & (df_combined[gc.columns.PRE_OR_POST] == gc.descriptives.PRE_MED)]
-        df_post = df_combined.loc[(df_combined['dataset'] == dataset) & (df_combined[gc.columns.PRE_OR_POST] == gc.descriptives.POST_MED)]
+        df_pre = df_subset.loc[df_subset[gc.columns.PRE_OR_POST] == gc.descriptives.PRE_MED]
+        df_post = df_subset.loc[df_subset[gc.columns.PRE_OR_POST] == gc.descriptives.POST_MED]
 
-        for segment_category in [1, 2, 3, 4, 'overall']:
+        for segment_category in ['overall']: # ['short', 'moderately_long', 'long', 'very_long', 'overall']:
             # Filter by segment category only if not 'overall'
             if segment_category != 'overall':
                 df_pre_cat = df_pre.loc[df_pre[gc.columns.TRUE_GAIT_SEGMENT_CAT] == segment_category]
@@ -235,7 +253,9 @@ def compute_effect_size(df, parameter, stat):
                 
                 d_effect_size[dataset][segment_category]['std'] = std_bootstrap
 
-                if segment_category == 'overall':
-                    d_diffs[dataset] = bootstrapped_differences
+                # if segment_category == 'overall':
+                #     d_diffs[dataset] = bootstrapped_differences
+        
+        del df_subset
 
-    return d_effect_size, d_diffs
+    return d_effect_size# , d_diffs
