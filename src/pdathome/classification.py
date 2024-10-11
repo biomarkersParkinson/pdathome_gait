@@ -170,26 +170,7 @@ def cv_train_test_model(subject, df, classifier_name, l_predictors, l_predictors
         threshold_index = np.argmax(fpr >= 0.05) - 1
         classification_threshold = thresholds[threshold_index]
     else:
-        fpr, tpr, thresholds = roc_curve(y_true=df_train[target_column_name], y_score=df_train[pred_proba_colname], pos_label=1)
-        spec = 1 - fpr
-
-        if threshold_method == 'youden': 
-            # Youden's Index
-            youden_index = tpr + spec - 1
-            threshold_index = np.argmax(youden_index)
-            classification_threshold = thresholds[threshold_index]
-        elif threshold_method == 'min_diff':
-            # Minimizing difference between sens and spec
-            diff = np.abs(tpr - spec)
-            threshold_index = np.argmin(diff)
-            classification_threshold = thresholds[threshold_index]
-        elif threshold_method == 'geometric':
-            # Geometric mean
-            geometric_mean = np.sqrt(tpr * spec)
-            threshold_index = np.argmax(geometric_mean)
-            classification_threshold = thresholds[threshold_index]
-        else:
-            classification_threshold = 0.5
+        classification_threshold = 0.5
     
     return df_test, classification_threshold
 
@@ -229,7 +210,7 @@ def windows_to_timestamps(subject, df, path_output, pred_proba_colname, step):
     df_ts_exploded = df_ts.explode(l_explode_cols)
 
     # Merge the exploded data with windowed data
-    df_single_points = pd.merge(left=df_ts_exploded, right=df, how='right', on=l_merge_ts_cols)
+    df_single_points = pd.merge(left=df_ts_exploded, right=df, how='left', on=l_merge_ts_cols)
         
     # Reset index after merging
     df_single_points.reset_index(drop=True, inplace=True)

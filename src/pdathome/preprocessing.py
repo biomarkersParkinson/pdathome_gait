@@ -575,35 +575,36 @@ def arm_label_majority_voting(config, arm_label):
     return np.nan
 
 
-def add_annotated_gait_segment_category(df, activity_colname, time_colname, segment_gap_s, gait_value):
+def add_segment_category(df, activity_colname, time_colname, segment_nr_colname,
+                         segment_cat_colname, segment_gap_s, activity_value):
     # Create segments based on video-annotations of gait
-    walking_segments = create_segments(
-        df=df.loc[df[activity_colname] == gait_value],
+    segments = create_segments(
+        df=df.loc[df[activity_colname] == activity_value],
         time_column_name=time_colname,
         gap_threshold_s=segment_gap_s
     )
 
     # Assign segment numbers to the raw data
-    df.loc[df[activity_colname] == gait_value, gc.columns.TRUE_GAIT_SEGMENT_NR] = walking_segments
+    df.loc[df[activity_colname] == activity_value, segment_nr_colname] = segments
 
     # Non-gait raw data is assigned a segment number of -1
-    df[gc.columns.TRUE_GAIT_SEGMENT_NR] = df[gc.columns.TRUE_GAIT_SEGMENT_NR].fillna(-1)
+    df[segment_nr_colname] = df[segment_nr_colname].fillna(-1)
 
     # Map categories to segments of video-annotated gait
-    walking_segments_cat = categorize_segments(
-        df=df.loc[(df[gc.columns.FREE_LIVING_LABEL] == gait_value) & (df[gc.columns.TRUE_GAIT_SEGMENT_NR] != -1)],
-        segment_nr_colname=gc.columns.TRUE_GAIT_SEGMENT_NR,
+    segments_cat = categorize_segments(
+        df=df.loc[(df[activity_colname] == activity_value) & (df[segment_nr_colname] != -1)],
+        segment_nr_colname=segment_nr_colname,
         sampling_frequency=gc.parameters.DOWNSAMPLED_FREQUENCY
     )
 
     # Assign segment categories to the raw data
-    df.loc[(df[activity_colname] == gait_value) & (df[gc.columns.TRUE_GAIT_SEGMENT_NR] != -1), gc.columns.TRUE_GAIT_SEGMENT_CAT] = walking_segments_cat
+    df.loc[(df[activity_colname] == activity_value) & (df[segment_nr_colname] != -1), segment_cat_colname] = segments_cat
 
     # Non-gait raw data is assigned a segment category of -1
-    df[gc.columns.TRUE_GAIT_SEGMENT_CAT] = df[gc.columns.TRUE_GAIT_SEGMENT_CAT].fillna(-1)
+    df[segment_cat_colname] = df[segment_cat_colname].fillna(-1)
 
     # Map segment categories to segments of video-annotated gait
-    df[gc.columns.TRUE_GAIT_SEGMENT_CAT] = df[gc.columns.TRUE_GAIT_SEGMENT_CAT].apply(
+    df[segment_cat_colname] = df[segment_cat_colname].apply(
             lambda x: mp.segment_map[x]
         )
     
