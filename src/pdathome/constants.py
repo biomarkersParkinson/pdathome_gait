@@ -118,6 +118,25 @@ class Classifiers:
     GAIT_DETECTION_CLASSIFIER_SELECTED: str = 'rf'
     ARM_ACTIVITY_CLASSIFIER_SELECTED: str = 'logreg'
 
+    LOGISTIC_REGRESSION_PARAM_GRID: Dict[str, Any] = field(default_factory=lambda: {
+        'penalty': ['l1'],
+        'solver': ['saga'],
+        'tol': [1e-3, 1e-4, 1e-5],
+        'C': [1e-4, 1e-3, 1e-2, 1e-1, 1, 10],
+        'random_state': [22],
+    })
+
+    RANDOM_FOREST_PARAM_GRID: Dict[str, Any] = field(default_factory=lambda: {
+        'n_estimators': [50, 100, 200],
+        'max_features': ['sqrt'],
+        'min_samples_split': [20, 50, 100],
+        'max_depth': [10, 15, 20],
+        'criterion': ['gini'],
+        'bootstrap': [True],
+        'oob_score': [True],
+        'random_state': [22],
+    })
+
     LOGISTIC_REGRESSION_HYPERPARAMETERS: Dict[str, Any] = field(default_factory=lambda: {
         'penalty': 'l1',
         'solver': 'saga',
@@ -263,7 +282,9 @@ metric_map = {
 
 arm_swing_parameter_map = {
     'range_of_motion_median': 'Median range of motion [deg]',
+    'median_rom': 'Median range of motion [deg]',
     'range_of_motion_quantile_95': '95th percentile range of motion [deg]',
+    '95p_rom': '95th percentile range of motion [deg]',
     'peak_velocity_median': 'Median peak velocity [deg/s]',
     'peak_velocity_quantile_95': '95th percentile peak velocity [deg/s]',
 }

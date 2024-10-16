@@ -8,7 +8,8 @@ import warnings
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.exceptions import ConvergenceWarning
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import roc_curve
+from sklearn.metrics import roc_curve, make_scorer, roc_auc_score
+from sklearn.model_selection import GridSearchCV
 from sklearn.preprocessing import StandardScaler
 from typing import Callable, List
 
@@ -30,7 +31,6 @@ def train_test(
     step: str,
     path_features: str,
     path_predictions: str,
-    threshold_method: str = None,
     n_jobs: int = -1,
 ):
     # Initialize configuration
@@ -48,7 +48,7 @@ def train_test(
     for classifier_name in l_classifiers:
 
         # Train and test model
-        df_test, classification_threshold = cv_train_test_model(
+        df_test, classification_threshold, best_params, best_score = cv_train_test_model(
             subject=subject,
             df=df_all_subjects,
             classifier_name=classifier_name,
@@ -57,7 +57,6 @@ def train_test(
             target_column_name=target_column_name,
             pred_proba_colname=pred_proba_colname,
             n_jobs=n_jobs,
-            threshold_method=threshold_method,
             step=step,
         )
 
@@ -71,6 +70,12 @@ def train_test(
 
         with open(os.path.join(gc.paths.PATH_THRESHOLDS, step, f'{classifier_name}_{subject}.txt'), 'w') as f:
             f.write(str(classification_threshold))
+
+        with open(os.path.join(gc.paths.PATH_THRESHOLDS, step, f'{classifier_name}_{subject}_params.json'), 'w') as f:
+            json.dump(best_params, f, indent=4)
+
+        with open(os.path.join(gc.paths.PATH_THRESHOLDS, step, f'{classifier_name}_{subject}_score.txt'), 'w') as f:
+            f.write(str(best_score))
 
 
 def train_test_gait_detection(subject, l_classifiers, n_jobs=-1):
@@ -102,13 +107,12 @@ def train_test_filtering_gait(subject, l_classifiers, n_jobs=-1):
             step='arm_activity',
             path_features=gc.paths.PATH_ARM_ACTIVITY_FEATURES,
             path_predictions=gc.paths.PATH_ARM_ACTIVITY_PREDICTIONS,
-            threshold_method='geometric',
             n_jobs=n_jobs
         )
 
 
 def cv_train_test_model(subject, df, classifier_name, l_predictors, l_predictors_scale, target_column_name, 
-                        pred_proba_colname, step, threshold_method=None, n_jobs=-1):
+                        pred_proba_colname, step, n_jobs=-1):
 
     # Check for valid step
     if step not in ['gait', 'arm_activity']:
@@ -143,36 +147,64 @@ def cv_train_test_model(subject, df, classifier_name, l_predictors, l_predictors
             class_weight=class_weight,
             n_jobs=n_jobs
         )
+        param_grid = gc.classifiers.RANDOM_FOREST_PARAM_GRID
     elif classifier_name == gc.classifiers.LOGISTIC_REGRESSION:
         clf = LogisticRegression(
             **gc.classifiers.LOGISTIC_REGRESSION_HYPERPARAMETERS,
             class_weight=class_weight,
             n_jobs=n_jobs,
         )
+        param_grid = gc.classifiers.LOGISTIC_REGRESSION_PARAM_GRID
         
-    # Train the model
-    clf.fit(X_train, y_train)
+    # Perform Grid Search with cross-validation
+    grid_search = GridSearchCV(
+        clf, param_grid, scoring=make_scorer(roc_auc_score), 
+        cv=len(df_train[gc.columns.ID].unique()), n_jobs=n_jobs
+    )
+    grid_search.fit(X_train, y_train)
+
+    # Retrieve the best model from Grid Search
+    best_clf = grid_search.best_estimator_
+
+    best_clf.fit(X_train, y_train)
 
     # Predict probabilities on the test set
     df_test['true'] = y_test
 
-    df_train[pred_proba_colname] = clf.predict_proba(X_train)[:,1]
-    df_test[pred_proba_colname] = clf.predict_proba(X_test)[:,1]
+    df_train[pred_proba_colname] = best_clf.predict_proba(X_train)[:,1]
+    df_test[pred_proba_colname] = best_clf.predict_proba(X_test)[:,1]
     
     # Threshold determination for 'gait' step
     if step == 'gait':
         X_pop_train = df_train.loc[pd_train_mask, l_predictors]
         y_pop_train = df_train.loc[pd_train_mask, target_column_name].astype(int)
-        y_train_pred_proba_pop = clf.predict_proba(X_pop_train)[:,1]
+        y_train_pred_proba_pop = best_clf.predict_proba(X_pop_train)[:,1]
 
         # set threshold to obtain at least 95% train specificity
         fpr, _, thresholds = roc_curve(y_true=y_pop_train, y_score=y_train_pred_proba_pop, pos_label=1)
         threshold_index = np.argmax(fpr >= 0.05) - 1
         classification_threshold = thresholds[threshold_index]
     else:
-        classification_threshold = 0.5
+        # For non-gait steps, calculate a threshold per participant in training set and average them
+        subject_thresholds = []
+        for train_subject in df_train[gc.columns.ID].unique():
+            X_subject = df_train[df_train[gc.columns.ID] == train_subject][l_predictors]
+            y_subject = df_train[df_train[gc.columns.ID] == train_subject][target_column_name].astype(int)
+            y_subject_pred_proba = best_clf.predict_proba(X_subject)[:, 1]
+
+            fpr, tpr, thresholds = roc_curve(y_true=y_subject, y_score=y_subject_pred_proba, pos_label=1)
+            youden_j = tpr - fpr
+            threshold_index = np.argmax(youden_j)
+            subject_thresholds.append(thresholds[threshold_index])
+
+        # Average the thresholds across subjects
+        classification_threshold = np.mean(subject_thresholds)
     
-    return df_test, classification_threshold
+    # Store the grid search results
+    best_params = grid_search.best_params_
+    best_score = grid_search.best_score_
+
+    return df_test, classification_threshold, best_params, best_score
 
 
 def windows_to_timestamps(subject, df, path_output, pred_proba_colname, step):
