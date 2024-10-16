@@ -57,6 +57,7 @@ def train_test(
             l_predictors_scale=l_predictors_scale,
             target_column_name=target_column_name,
             pred_proba_colname=pred_proba_colname,
+            gsearch=gsearch,
             n_jobs=n_jobs,
             step=step,
         )
