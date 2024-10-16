@@ -121,7 +121,7 @@ class Classifiers:
     LOGISTIC_REGRESSION_PARAM_GRID: Dict[str, Any] = field(default_factory=lambda: {
         'penalty': ['l1'],
         'solver': ['saga'],
-        'tol': [1e-3, 1e-4, 1e-5],
+        'tol': [1e-4, 1e-5],
         'C': [1e-4, 1e-3, 1e-2, 1e-1, 1, 10],
         'random_state': [22],
     })
@@ -130,7 +130,7 @@ class Classifiers:
         'n_estimators': [50, 100, 200],
         'max_features': ['sqrt'],
         'min_samples_split': [20, 50, 100],
-        'max_depth': [10, 15, 20],
+        'max_depth': [None, 10, 20],
         'criterion': ['gini'],
         'bootstrap': [True],
         'oob_score': [True],

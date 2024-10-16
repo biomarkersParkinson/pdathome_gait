@@ -51,7 +51,7 @@ if __name__ == '__main__':
     fg_classifiers = [gc.classifiers.LOGISTIC_REGRESSION, gc.classifiers.RANDOM_FOREST]
 
     gd_gsearch = False
-    fg_gsearch = False
+    fg_gsearch = True
 
     # No need for nested parallelization
     n_jobs = 1

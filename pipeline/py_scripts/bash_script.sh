@@ -1,7 +1,7 @@
 #!/bin/bash
 #Set job requirements
 #SBATCH -N 1
-#SBATCH -t 03:00:00
+#SBATCH -t 24:00:00
 #SBATCH -p genoa
 
 # Set the output directory and filename directly in the SBATCH directive

@@ -9,7 +9,7 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.exceptions import ConvergenceWarning
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import roc_curve, make_scorer, roc_auc_score
-from sklearn.model_selection import GridSearchCV
+from sklearn.model_selection import GridSearchCV, RandomizedSearchCV
 from sklearn.preprocessing import StandardScaler
 from typing import Callable, List
 
@@ -163,14 +163,14 @@ def cv_train_test_model(subject, df, classifier_name, l_predictors, l_predictors
         
     if gsearch:
         # Perform Grid Search with cross-validation
-        grid_search = GridSearchCV(
-            clf, param_grid, scoring=make_scorer(roc_auc_score), 
-            cv=len(df_train[gc.columns.ID].unique()), n_jobs=n_jobs
+        randomized_search = RandomizedSearchCV(
+            clf, param_distributions=param_grid, scoring=make_scorer(roc_auc_score), n_iter=10,
+            cv=len(df_train[gc.columns.ID].unique()), n_jobs=n_jobs, random_state=42
         )
-        grid_search.fit(X_train, y_train)
+        randomized_search.fit(X_train, y_train)
 
         # Retrieve the best model from Grid Search
-        clf = grid_search.best_estimator_
+        clf = randomized_search.best_estimator_
 
     clf.fit(X_train, y_train)
 
@@ -208,8 +208,8 @@ def cv_train_test_model(subject, df, classifier_name, l_predictors, l_predictors
     
     if gsearch:
         # Store the grid search results
-        best_params = grid_search.best_params_
-        best_score = grid_search.best_score_
+        best_params = randomized_search.best_params_
+        best_score = randomized_search.best_score_
     else:
         best_params = None
         best_score = None
