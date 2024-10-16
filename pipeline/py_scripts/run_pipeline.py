@@ -50,16 +50,19 @@ if __name__ == '__main__':
     gd_classifiers = [gc.classifiers.LOGISTIC_REGRESSION, gc.classifiers.RANDOM_FOREST]
     fg_classifiers = [gc.classifiers.LOGISTIC_REGRESSION, gc.classifiers.RANDOM_FOREST]
 
+    gd_gsearch = False
+    fg_gsearch = True
+
     # No need for nested parallelization
     n_jobs = 1
 
     for step, func in steps_map.items():
         if step == '3':
-            steps_map[step] = partial(func, l_classifiers=gd_classifiers, n_jobs=n_jobs)
+            steps_map[step] = partial(func, l_classifiers=gd_classifiers, gsearch=gd_gsearch, n_jobs=n_jobs)
         elif step == '4':
             steps_map[step] = partial(func, l_classifiers=gd_classifiers)
         elif step == '6':
-            steps_map[step] = partial(func, l_classifiers=fg_classifiers, n_jobs=n_jobs)
+            steps_map[step] = partial(func, l_classifiers=fg_classifiers, gsearch=fg_gsearch, n_jobs=n_jobs)
         elif step == '7': 
             steps_map[step] = partial(func, l_classifiers=fg_classifiers)
 
