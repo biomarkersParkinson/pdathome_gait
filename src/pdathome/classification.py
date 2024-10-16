@@ -29,6 +29,7 @@ def train_test(
     target_column_name: str,
     pred_proba_colname: str,
     step: str,
+    gsearch: bool,
     path_features: str,
     path_predictions: str,
     n_jobs: int = -1,
@@ -71,14 +72,15 @@ def train_test(
         with open(os.path.join(gc.paths.PATH_THRESHOLDS, step, f'{classifier_name}_{subject}.txt'), 'w') as f:
             f.write(str(classification_threshold))
 
-        with open(os.path.join(gc.paths.PATH_THRESHOLDS, step, f'{classifier_name}_{subject}_params.json'), 'w') as f:
-            json.dump(best_params, f, indent=4)
+        if gsearch:
+            with open(os.path.join(gc.paths.PATH_THRESHOLDS, step, f'{classifier_name}_{subject}_params.json'), 'w') as f:
+                json.dump(best_params, f, indent=4)
 
-        with open(os.path.join(gc.paths.PATH_THRESHOLDS, step, f'{classifier_name}_{subject}_score.txt'), 'w') as f:
-            f.write(str(best_score))
+            with open(os.path.join(gc.paths.PATH_THRESHOLDS, step, f'{classifier_name}_{subject}_score.txt'), 'w') as f:
+                f.write(str(best_score))
 
 
-def train_test_gait_detection(subject, l_classifiers, n_jobs=-1):
+def train_test_gait_detection(subject, l_classifiers, gsearch=False, n_jobs=-1):
     print(f"Gait detection - Train-testing with LOSO - {subject} ...")
     train_test(
         subject=subject,
@@ -88,13 +90,14 @@ def train_test_gait_detection(subject, l_classifiers, n_jobs=-1):
         target_column_name=gc.columns.GAIT_MAJORITY_VOTING,
         pred_proba_colname=gc.columns.PRED_GAIT_PROBA,
         step='gait',
+        gsearch=gsearch,
         path_features=gc.paths.PATH_GAIT_FEATURES,
         path_predictions=gc.paths.PATH_GAIT_PREDICTIONS,
         n_jobs=n_jobs
     )
 
 
-def train_test_filtering_gait(subject, l_classifiers, n_jobs=-1):
+def train_test_filtering_gait(subject, l_classifiers, gsearch=False, n_jobs=-1):
     print(f"Filtering gait - Train-testing with LOSO - {subject} ...")
     if subject in gc.participant_ids.L_PD_IDS:
         train_test(
@@ -105,6 +108,7 @@ def train_test_filtering_gait(subject, l_classifiers, n_jobs=-1):
             target_column_name=gc.columns.OTHER_ARM_ACTIVITY_MAJORITY_VOTING,
             pred_proba_colname=gc.columns.PRED_OTHER_ARM_ACTIVITY_PROBA,
             step='arm_activity',
+            gsearch=gsearch,
             path_features=gc.paths.PATH_ARM_ACTIVITY_FEATURES,
             path_predictions=gc.paths.PATH_ARM_ACTIVITY_PREDICTIONS,
             n_jobs=n_jobs
@@ -112,7 +116,7 @@ def train_test_filtering_gait(subject, l_classifiers, n_jobs=-1):
 
 
 def cv_train_test_model(subject, df, classifier_name, l_predictors, l_predictors_scale, target_column_name, 
-                        pred_proba_colname, step, n_jobs=-1):
+                        pred_proba_colname, step, gsearch, n_jobs=-1):
 
     # Check for valid step
     if step not in ['gait', 'arm_activity']:
@@ -156,29 +160,30 @@ def cv_train_test_model(subject, df, classifier_name, l_predictors, l_predictors
         )
         param_grid = gc.classifiers.LOGISTIC_REGRESSION_PARAM_GRID
         
-    # Perform Grid Search with cross-validation
-    grid_search = GridSearchCV(
-        clf, param_grid, scoring=make_scorer(roc_auc_score), 
-        cv=len(df_train[gc.columns.ID].unique()), n_jobs=n_jobs
-    )
-    grid_search.fit(X_train, y_train)
+    if gsearch:
+        # Perform Grid Search with cross-validation
+        grid_search = GridSearchCV(
+            clf, param_grid, scoring=make_scorer(roc_auc_score), 
+            cv=len(df_train[gc.columns.ID].unique()), n_jobs=n_jobs
+        )
+        grid_search.fit(X_train, y_train)
 
-    # Retrieve the best model from Grid Search
-    best_clf = grid_search.best_estimator_
+        # Retrieve the best model from Grid Search
+        clf = grid_search.best_estimator_
 
-    best_clf.fit(X_train, y_train)
+    clf.fit(X_train, y_train)
 
     # Predict probabilities on the test set
     df_test['true'] = y_test
 
-    df_train[pred_proba_colname] = best_clf.predict_proba(X_train)[:,1]
-    df_test[pred_proba_colname] = best_clf.predict_proba(X_test)[:,1]
+    df_train[pred_proba_colname] = clf.predict_proba(X_train)[:,1]
+    df_test[pred_proba_colname] = clf.predict_proba(X_test)[:,1]
     
     # Threshold determination for 'gait' step
     if step == 'gait':
         X_pop_train = df_train.loc[pd_train_mask, l_predictors]
         y_pop_train = df_train.loc[pd_train_mask, target_column_name].astype(int)
-        y_train_pred_proba_pop = best_clf.predict_proba(X_pop_train)[:,1]
+        y_train_pred_proba_pop = clf.predict_proba(X_pop_train)[:,1]
 
         # set threshold to obtain at least 95% train specificity
         fpr, _, thresholds = roc_curve(y_true=y_pop_train, y_score=y_train_pred_proba_pop, pos_label=1)
@@ -190,7 +195,7 @@ def cv_train_test_model(subject, df, classifier_name, l_predictors, l_predictors
         for train_subject in df_train[gc.columns.ID].unique():
             X_subject = df_train[df_train[gc.columns.ID] == train_subject][l_predictors]
             y_subject = df_train[df_train[gc.columns.ID] == train_subject][target_column_name].astype(int)
-            y_subject_pred_proba = best_clf.predict_proba(X_subject)[:, 1]
+            y_subject_pred_proba = clf.predict_proba(X_subject)[:, 1]
 
             fpr, tpr, thresholds = roc_curve(y_true=y_subject, y_score=y_subject_pred_proba, pos_label=1)
             youden_j = tpr - fpr
@@ -200,9 +205,13 @@ def cv_train_test_model(subject, df, classifier_name, l_predictors, l_predictors
         # Average the thresholds across subjects
         classification_threshold = np.mean(subject_thresholds)
     
-    # Store the grid search results
-    best_params = grid_search.best_params_
-    best_score = grid_search.best_score_
+    if gsearch:
+        # Store the grid search results
+        best_params = grid_search.best_params_
+        best_score = grid_search.best_score_
+    else:
+        best_params = None
+        best_score = None
 
     return df_test, classification_threshold, best_params, best_score
 
