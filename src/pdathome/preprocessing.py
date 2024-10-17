@@ -273,13 +273,13 @@ def preprocess_filtering_gait(subject):
         
         # Filter unobserved data
         if subject in gc.participant_ids.L_PD_IDS:
-            df = df[df[gc.columns.ARM_LABEL] != 'cant assess']
+            df = df[df[gc.columns.ARM_LABEL] != 'Cannot assess']
         
         # Use only predicted gait for the subsequent steps
         df = df[df[gc.columns.PRED_GAIT] == 1].reset_index(drop=True)
 
         # Group consecutive timestamps into segments with new segments starting after a pre-specified gap
-        df[gc.columns.PRED_GAIT_SEGMENT_NR] = create_segments(
+        df[gc.columns.PRED_SEGMENT_NR] = create_segments(
             df=df,
             time_column_name=gc.columns.TIME,
             gap_threshold_s=gc.parameters.SEGMENT_GAP_GAIT
@@ -288,7 +288,7 @@ def preprocess_filtering_gait(subject):
         # Remove any segments that do not adhere to predetermined criteria
         df = discard_segments(
             df=df,
-            segment_nr_colname=gc.columns.PRED_GAIT_SEGMENT_NR,
+            segment_nr_colname=gc.columns.PRED_SEGMENT_NR,
             min_length_segment_s=arm_activity_config.window_length_s,
             sampling_frequency=arm_activity_config.sampling_frequency
         )
@@ -297,7 +297,7 @@ def preprocess_filtering_gait(subject):
         arm_activity_config.l_data_point_level_cols += [
             gc.columns.FREE_LIVING_LABEL
         ]
-        l_single_value_cols = [gc.columns.PRED_GAIT_SEGMENT_NR]
+        l_single_value_cols = [gc.columns.PRED_SEGMENT_NR]
         if subject in gc.participant_ids.L_PD_IDS:
             l_single_value_cols.append(gc.columns.PRE_OR_POST)
             arm_activity_config.l_data_point_level_cols.append(gc.columns.ARM_LABEL)
@@ -308,14 +308,14 @@ def preprocess_filtering_gait(subject):
 
         l_dfs = [
             tabulate_windows(
-                df=df[df[gc.columns.PRED_GAIT_SEGMENT_NR] == segment_nr].reset_index(drop=True),
+                df=df[df[gc.columns.PRED_SEGMENT_NR] == segment_nr].reset_index(drop=True),
                 window_size=int(arm_activity_config.window_length_s * arm_activity_config.sampling_frequency),
                 step_size=int(arm_activity_config.window_step_size_s * arm_activity_config.sampling_frequency),
                 time_column_name=gc.columns.TIME,
                 list_value_cols=arm_activity_config.l_data_point_level_cols,
                 single_value_cols=l_single_value_cols,
             )
-            for segment_nr in df[gc.columns.PRED_GAIT_SEGMENT_NR].unique()
+            for segment_nr in df[gc.columns.PRED_SEGMENT_NR].unique()
         ]
         l_dfs = [df for df in l_dfs if not df.empty]
 
@@ -323,8 +323,8 @@ def preprocess_filtering_gait(subject):
 
         # Update window numbers to be unique across segments
         max_window_nr = 0
-        for segment_nr in sorted(df[gc.columns.PRED_GAIT_SEGMENT_NR].unique()):  
-            segment_mask = df_windowed[gc.columns.PRED_GAIT_SEGMENT_NR] == segment_nr
+        for segment_nr in sorted(df[gc.columns.PRED_SEGMENT_NR].unique()):  
+            segment_mask = df_windowed[gc.columns.PRED_SEGMENT_NR] == segment_nr
             df_windowed.loc[segment_mask, gc.columns.WINDOW_NR] += max_window_nr
             max_window_nr = df_windowed.loc[segment_mask, gc.columns.WINDOW_NR].max()
 
