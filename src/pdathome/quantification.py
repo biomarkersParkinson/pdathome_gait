@@ -54,13 +54,15 @@ def initialize_d_quant(df_agg_side, l_measures):
     return d_quant
 
 
-def populate_overall_aggregates(df, df_agg_side, d_quant, l_measures):
+def populate_overall_aggregates(df, df_agg_side, d_quant, l_measures, use_timestamps):
     """Populates the overall aggregated metrics and total time."""
     for med_stage in df_agg_side[gc.columns.PRE_OR_POST].unique():
         for affected_side in [gc.descriptives.MOST_AFFECTED_SIDE, gc.descriptives.LEAST_AFFECTED_SIDE]:
             # Compute overall time (seconds)
             overall_seconds = df.loc[(df[gc.columns.PRE_OR_POST] == med_stage) &
-                                     (df[gc.columns.SIDE] == affected_side)].shape[0] / gc.parameters.DOWNSAMPLED_FREQUENCY
+                                     (df[gc.columns.SIDE] == affected_side)].shape[0] 
+            if use_timestamps:
+                overall_seconds /= gc.parameters.DOWNSAMPLED_FREQUENCY
             d_quant[med_stage][affected_side]['seconds']['overall'] = overall_seconds
 
             # Populate aggregated measures
@@ -70,24 +72,26 @@ def populate_overall_aggregates(df, df_agg_side, d_quant, l_measures):
                                     (df_agg_side[gc.columns.SIDE] == affected_side), measure].values[0]
                 
 
-def populate_segment_aggregates(df, df_agg_segments, d_quant, l_measures):
+def populate_segment_aggregates(df, df_agg_segments, d_quant, l_measures, segment_cat_colname, use_timestamps):
     """Populates the segment-specific aggregated metrics."""
     for med_stage in df_agg_segments[gc.columns.PRE_OR_POST].unique():
         df_med_stage = df_agg_segments.loc[df_agg_segments[gc.columns.PRE_OR_POST] == med_stage]
         for affected_side in df_med_stage[gc.columns.SIDE].unique():
             df_aff = df_med_stage.loc[df_med_stage[gc.columns.SIDE] == affected_side]
-            for segment_category in df_aff[gc.columns.TRUE_GAIT_SEGMENT_CAT].unique():
+            for segment_category in df_aff[segment_cat_colname].unique():
                 segment_seconds = df.loc[
                     (df[gc.columns.PRE_OR_POST] == med_stage) &
                     (df[gc.columns.SIDE] == affected_side) &
-                    (df[gc.columns.TRUE_GAIT_SEGMENT_CAT] == segment_category)
-                ].shape[0] / gc.parameters.DOWNSAMPLED_FREQUENCY
+                    (df[segment_cat_colname] == segment_category)
+                ].shape[0]
+                if use_timestamps:
+                    segment_seconds /= gc.parameters.DOWNSAMPLED_FREQUENCY
                 d_quant[med_stage][affected_side]['seconds'][segment_category] = segment_seconds
                 
                 # Populate each measure for the segment
                 for measure in l_measures:
                     d_quant[med_stage][affected_side]['values'][measure][segment_category] = \
-                        df_aff.loc[df_aff[gc.columns.TRUE_GAIT_SEGMENT_CAT] == segment_category, measure].values[0]
+                        df_aff.loc[df_aff[segment_cat_colname] == segment_category, measure].values[0]
 
     # Compute non-gait time
     compute_non_gait_time(d_quant)
@@ -103,7 +107,7 @@ def compute_non_gait_time(d_quant):
             d_quant[med_stage][affected_side]['seconds']['non_gait'] = overall_seconds - gait_seconds
 
 
-def compute_aggregations(df):
+def compute_aggregations(subject, df, segment_cat_colname, use_timestamps):
 
     l_metrics = ['range_of_motion', 'peak_velocity']
     l_aggregates = ['median']
@@ -114,9 +118,8 @@ def compute_aggregations(df):
         'peak_velocity_median', 'peak_velocity_quantile_95'
     ]
 
-    l_groupby = [gc.columns.PRE_OR_POST]
-    l_groupby_side = l_groupby + [gc.columns.SIDE]
-    l_groupby_segments = l_groupby_side + [gc.columns.TRUE_GAIT_SEGMENT_CAT]
+    l_groupby_side = [gc.columns.PRE_OR_POST, gc.columns.SIDE]
+    l_groupby_segments = l_groupby_side + [segment_cat_colname]
 
     # Extract features aggregated by side and segment
     df_agg_side = extract_features(df, l_groupby_side, l_metrics, l_aggregates, l_quantiles)
@@ -126,15 +129,15 @@ def compute_aggregations(df):
     d_quant = initialize_d_quant(df_agg_side, l_measures)
 
     # Populate overall metrics by side
-    populate_overall_aggregates(df, df_agg_side, d_quant, l_measures)
+    populate_overall_aggregates(df, df_agg_side, d_quant, l_measures, use_timestamps)
 
     # Populate segment-specific metrics
-    populate_segment_aggregates(df, df_agg_segments, d_quant, l_measures)
+    populate_segment_aggregates(df, df_agg_segments, d_quant, l_measures, segment_cat_colname=segment_cat_colname, use_timestamps=use_timestamps)
 
     return d_quant
 
 
-def bootstrap_samples(data, stat, num_samples=5000):
+def bootstrap_samples(data, stat, num_samples=10000):
     """
     Perform bootstrapping on the given data to compute point estimates.
     
@@ -155,7 +158,7 @@ def bootstrap_samples(data, stat, num_samples=5000):
         raise ValueError("Unsupported stat, choose either 'median' or '95'.")
 
 
-def compute_effect_size(df, parameter, stat): 
+def compute_effect_size(df, parameter, stat, segment_cat_colname): 
     """
     Computes effect size between pre-med and post-med parameters using either bootstrapped standard deviation or pooled standard deviation.
     
@@ -169,38 +172,17 @@ def compute_effect_size(df, parameter, stat):
     - d_effect_size (dict): Dictionary containing effect size information.
     - d_diffs (dict): Dictionary containing bootstrapped differences if applicable.
     """
-    # Get the counts of unique segment categories per window_nr
-    segment_counts = df.groupby(gc.columns.WINDOW_NR)[gc.columns.TRUE_GAIT_SEGMENT_CAT].nunique()
-
-    # Filter to keep only window_nr values that have a single unique segment category
-    single_segment_windows = segment_counts[segment_counts == 1].index
-
-    # Filter the original DataFrame to keep only the rows with those window numbers
-    filtered_df = df[df[gc.columns.WINDOW_NR].isin(single_segment_windows)]
-
-    # df_copy = filtered_df.copy()
-    # df_copy['dataset'] = 'Predicted gait'
-
-    # # Create predicted gait and annotated datasets
-    # df_pred = df_copy.loc[(df_copy[gc.columns.PRED_OTHER_ARM_ACTIVITY] == 0)].copy()
-    # df_pred['dataset'] = 'Predicted gait predicted NOAA'
-
-    # df_ann = df_copy.loc[(df_copy['other_arm_activity_boolean'] == 0)].copy()
-    # df_ann['dataset'] = 'Predicted gait annotated NOAA'
-
-    # # Combine the datasets
-    # df_combined = pd.concat([df_copy, df_pred, df_ann], axis=0).reset_index(drop=True)
 
     d_effect_size = {}
     d_diffs = {}
 
     for dataset in ['predicted_gait', 'pred_gait_predicted_noaa', 'pred_gait_annotated_noaa']:
         if dataset == 'predicted_gait':
-            df_subset = filtered_df.copy()
+            df_subset = df.copy()
         elif dataset == 'pred_gait_predicted_noaa':
-            df_subset = filtered_df.loc[filtered_df[gc.columns.PRED_OTHER_ARM_ACTIVITY] == 0].copy()
+            df_subset = df.loc[df[gc.columns.PRED_OTHER_ARM_ACTIVITY] == 0].copy()
         elif dataset == 'pred_gait_annotated_noaa':
-            df_subset = filtered_df.loc[filtered_df['other_arm_activity_boolean'] == 0].copy()
+            df_subset = df.loc[df['other_arm_activity_majority_voting'] == 0].copy()
         else:
             raise ValueError("Invalid dataset provided.")
 
@@ -210,11 +192,11 @@ def compute_effect_size(df, parameter, stat):
         df_pre = df_subset.loc[df_subset[gc.columns.PRE_OR_POST] == gc.descriptives.PRE_MED]
         df_post = df_subset.loc[df_subset[gc.columns.PRE_OR_POST] == gc.descriptives.POST_MED]
 
-        for segment_category in ['overall']: # ['short', 'moderately_long', 'long', 'very_long', 'overall']:
+        for segment_category in ['short', 'moderately_long', 'long', 'very_long', 'overall']:
             # Filter by segment category only if not 'overall'
             if segment_category != 'overall':
-                df_pre_cat = df_pre.loc[df_pre[gc.columns.TRUE_GAIT_SEGMENT_CAT] == segment_category]
-                df_post_cat = df_post.loc[df_post[gc.columns.TRUE_GAIT_SEGMENT_CAT] == segment_category]
+                df_pre_cat = df_pre.loc[df_pre[segment_cat_colname] == segment_category]
+                df_post_cat = df_post.loc[df_post[segment_cat_colname] == segment_category]
             else:
                 df_pre_cat = df_pre
                 df_post_cat = df_post
@@ -253,9 +235,7 @@ def compute_effect_size(df, parameter, stat):
                 
                 d_effect_size[dataset][segment_category]['std'] = std_bootstrap
 
-                # if segment_category == 'overall':
-                #     d_diffs[dataset] = bootstrapped_differences
+                if segment_category == 'overall':
+                    d_diffs[dataset] = bootstrapped_differences
         
-        del df_subset
-
-    return d_effect_size# , d_diffs
+    return d_effect_size, d_diffs

@@ -74,11 +74,9 @@ def train_test(
             f.write(str(classification_threshold))
 
         if gsearch:
+            best_params['score'] = best_score
             with open(os.path.join(gc.paths.PATH_THRESHOLDS, step, f'{classifier_name}_{subject}_params.json'), 'w') as f:
                 json.dump(best_params, f, indent=4)
-
-            with open(os.path.join(gc.paths.PATH_THRESHOLDS, step, f'{classifier_name}_{subject}_score.txt'), 'w') as f:
-                f.write(str(best_score))
 
 
 def train_test_gait_detection(subject, l_classifiers, gsearch=False, n_jobs=-1):
@@ -127,7 +125,7 @@ def cv_train_test_model(subject, df, classifier_name, l_predictors, l_predictors
     class_weight = None if step == 'gait' else 'balanced'
 
     # Split the data for training and testing
-    df_train = df[df[gc.columns.ID] != subject].copy()
+    df_train = df[(df[gc.columns.ID] != subject) & (df[gc.columns.PRE_OR_POST]=='pre')].copy()
     df_test = df[df[gc.columns.ID] == subject].copy()
     
     # Fit a scaler on the pd participants
@@ -317,6 +315,8 @@ def store_model_output(df, classifier_name, step, n_jobs=-1):
             class_weight=class_weight,
             n_jobs=n_jobs
         )
+    else:
+        raise ValueError("Classifier not recognized")
 
     # Fit the model
     clf.fit(X, y)
@@ -360,18 +360,20 @@ def store_model_output(df, classifier_name, step, n_jobs=-1):
     else:
         l_ids = gc.participant_ids.L_PD_IDS
 
-    thresholds = []
-    for subject in l_ids:
-        with open(os.path.join(gc.paths.PATH_THRESHOLDS, step, f'{classifier_name}_{subject}.txt'), 'r') as f:
-            thresholds.append(float(f.read()))
+    if os.path.exists(os.path.join(gc.paths.PATH_THRESHOLDS, step, f'{classifier_name}_hbv002.txt')):
+        thresholds = []
+        for subject in l_ids:
+            with open(os.path.join(gc.paths.PATH_THRESHOLDS, step, f'{classifier_name}_{subject}.txt'), 'r') as f:
+                thresholds.append(float(f.read()))
 
-    mean_threshold = np.mean(thresholds)
-    with open(os.path.join(gc.paths.PATH_THRESHOLDS, step, f'{classifier_name}.txt'), 'w') as f:
-        f.write(str(mean_threshold))
+        mean_threshold = np.mean(thresholds)
+    
+        with open(os.path.join(gc.paths.PATH_THRESHOLDS, step, f'{classifier_name}.txt'), 'w') as f:
+            f.write(str(mean_threshold))
 
-    # Delete individual thresholds
-    for subject in l_ids:
-        os.remove(os.path.join(gc.paths.PATH_THRESHOLDS, step, f'{classifier_name}_{subject}.txt')) 
+        # Delete individual thresholds
+        for subject in l_ids:
+            os.remove(os.path.join(gc.paths.PATH_THRESHOLDS, step, f'{classifier_name}_{subject}.txt')) 
 
     if step == 'arm_activity':       
         # Predict arm activity for the controls

@@ -235,8 +235,7 @@ def generate_results_classification(step, subject, segment_gap_s):
                 clf_threshold = float(f.read())
         else:
             # Paths
-            # path_predictions = gc.paths.PATH_ARM_ACTIVITY_PREDICTIONS
-            path_predictions = r'C:\Users\erik_\Documents\PhD\data\pdh_public\preprocessed_data\tmp_mindiff\4.arm_activity_predictions'
+            path_predictions = gc.paths.PATH_ARM_ACTIVITY_PREDICTIONS
 
             # Columns
             pred_proba_colname = gc.columns.PRED_OTHER_ARM_ACTIVITY_PROBA
@@ -254,58 +253,49 @@ def generate_results_classification(step, subject, segment_gap_s):
             # Values
             outcome_value = 0 # No other arm activity
 
-            # Classification threshold
-            # with open(os.path.join(r'C:\Users\erik_\Documents\PhD\data\pdh_public\preprocessed_data\tmp_mindiff\output\classification_thresholds', step, f'{model}.txt'), 'r') as f:
-            #     clf_threshold = float(f.read())
-
-            clf_threshold = 0.5
+            with open(os.path.join(gc.paths.PATH_THRESHOLDS, step, f'{model}.txt'), 'r') as f:
+                clf_threshold = float(f.read())
 
         l_raw_cols = [gc.columns.TIME, gc.columns.SIDE, gc.columns.FREE_LIVING_LABEL]
         l_segment_cats = []
 
         # For PD, keep the segments of annotations for each step
+        l_raw_cols += [gc.columns.TRUE_SEGMENT_NR, gc.columns.TRUE_SEGMENT_CAT]
         if subject in gc.participant_ids.L_PD_IDS:
-            l_raw_cols += [gc.columns.ARM_LABEL, gc.columns.PRE_OR_POST, gc.columns.TRUE_SEGMENT_NR, gc.columns.TRUE_SEGMENT_CAT]
+            l_raw_cols += [gc.columns.ARM_LABEL, gc.columns.PRE_OR_POST]
 
             if step == 'gait' and subject in gc.participant_ids.L_TREMOR_IDS:
                 l_raw_cols.append(gc.columns.TREMOR_LABEL)
-        
-        # For controls, keep the segments of annotations for gait
-        elif subject in gc.participant_ids.L_HC_IDS and step == 'gait':
-            l_raw_cols += [gc.columns.TRUE_SEGMENT_NR, gc.columns.TRUE_SEGMENT_CAT]
         
         # Predictions
         df_predictions = pd.read_pickle(os.path.join(path_predictions, model, f'{subject}.pkl'))
         
         # Load raw data
         l_dfs = []
-        for side in [gc.descriptives.MOST_AFFECTED_SIDE, gc.descriptives.LEAST_AFFECTED_SIDE]:
-            df_raw = pd.read_pickle(os.path.join(gc.paths.PATH_PREPARED_DATA, f'{subject}_{side}.pkl')).assign(side=side)
 
-            # Set segment column names for annotations
-            if step == 'gait':
+        # Set segment column names for annotations
+        if step == 'gait':
+            activity_colname = gc.columns.FREE_LIVING_LABEL
+            activity_value = 'Walking'
+
+        elif step == 'arm_activity':
+            if subject in gc.participant_ids.L_PD_IDS:
+                activity_colname = gc.columns.ARM_LABEL
+                activity_value = 'Gait without other behaviours or other positions' # TEMPORARILY TRY WITH ARM ACTIVITY INSTEAD OF GAIT
+            else:
                 activity_colname = gc.columns.FREE_LIVING_LABEL
                 activity_value = 'Walking'
 
-                df_raw = add_segment_category(
-                    df=df_raw, activity_colname=activity_colname,
-                    time_colname=gc.columns.TIME, segment_nr_colname=gc.columns.TRUE_SEGMENT_NR,
-                    segment_cat_colname=gc.columns.TRUE_SEGMENT_CAT, segment_gap_s=segment_gap_s, 
-                    activity_value=activity_value)
-                
-                l_segment_cats.append(gc.columns.TRUE_SEGMENT_CAT)
-                
-            elif step == 'arm_activity' and subject in gc.participant_ids.L_PD_IDS:
-                activity_colname = gc.columns.ARM_LABEL
-                activity_value = 'Gait without other behaviours or other positions'
+        l_segment_cats.append(gc.columns.TRUE_SEGMENT_CAT)
 
-                df_raw = add_segment_category(
+        for side in [gc.descriptives.MOST_AFFECTED_SIDE, gc.descriptives.LEAST_AFFECTED_SIDE]:
+            df_raw = pd.read_pickle(os.path.join(gc.paths.PATH_PREPARED_DATA, f'{subject}_{side}.pkl')).assign(side=side)
+
+            df_raw = add_segment_category(
                     df=df_raw, activity_colname=activity_colname,
                     time_colname=gc.columns.TIME, segment_nr_colname=gc.columns.TRUE_SEGMENT_NR,
                     segment_cat_colname=gc.columns.TRUE_SEGMENT_CAT, segment_gap_s=segment_gap_s, 
                     activity_value=activity_value)
-                
-                l_segment_cats.append(gc.columns.TRUE_SEGMENT_CAT)
 
             l_dfs.append(df_raw)
 
@@ -363,8 +353,8 @@ def generate_results_classification(step, subject, segment_gap_s):
                 d_performance[model][affected_side][med_stage] = {}
                 df_med_stage = df_side.loc[df_side[gc.columns.PRE_OR_POST]==med_stage].copy()
 
-                pred_seconds_true = df_med_stage.loc[df_med_stage[pred_colname]==outcome_value].shape[0] / gc.parameters.DOWNSAMPLED_FREQUENCY
-                pred_seconds_false = df_med_stage.loc[df_med_stage[pred_colname]==1-outcome_value].shape[0] / gc.parameters.DOWNSAMPLED_FREQUENCY
+                pred_seconds_true = df_med_stage.loc[df_med_stage[pred_colname]==1].shape[0] / gc.parameters.DOWNSAMPLED_FREQUENCY
+                pred_seconds_false = df_med_stage.loc[df_med_stage[pred_colname]==0].shape[0] / gc.parameters.DOWNSAMPLED_FREQUENCY
 
                 d_performance[model][affected_side][med_stage]['size'] = {
                     f'pred_{boolean_colname}_s': pred_seconds_true,
@@ -372,8 +362,8 @@ def generate_results_classification(step, subject, segment_gap_s):
                 }
 
                 if not (subject in gc.participant_ids.L_HC_IDS and step == 'arm_activity'):
-                    ann_seconds_true = df_med_stage.loc[df_med_stage[boolean_colname]==outcome_value].shape[0] / gc.parameters.DOWNSAMPLED_FREQUENCY
-                    ann_seconds_false = df_med_stage.loc[df_med_stage[boolean_colname]==1-outcome_value].shape[0] / gc.parameters.DOWNSAMPLED_FREQUENCY
+                    ann_seconds_true = df_med_stage.loc[df_med_stage[boolean_colname]==1].shape[0] / gc.parameters.DOWNSAMPLED_FREQUENCY
+                    ann_seconds_false = df_med_stage.loc[df_med_stage[boolean_colname]==0].shape[0] / gc.parameters.DOWNSAMPLED_FREQUENCY
 
                     d_performance[model][affected_side][med_stage]['size'][f'ann_{boolean_colname}_s'] = ann_seconds_true
                     d_performance[model][affected_side][med_stage]['size'][f'ann_no_{boolean_colname}_s'] = ann_seconds_false
@@ -513,9 +503,28 @@ def load_arm_activity_timestamps(subject: str, side: str) -> pd.DataFrame:
     return df_ts
 
 
-def generate_results_quantification(subject: str) -> tuple[dict, pd.DataFrame]:
+def generate_results_quantification(subject: str, segment_by: str) -> tuple[dict, pd.DataFrame]:
     """Generate quantification results for a given subject."""
     classification_threshold = 0.5
+    use_timestamps = False
+
+    if segment_by == gc.columns.FREE_LIVING_LABEL:
+        segment_nr_colname = gc.columns.TRUE_SEGMENT_NR
+        segment_cat_colname = gc.columns.TRUE_SEGMENT_CAT
+        activity_colname = gc.columns.FREE_LIVING_LABEL
+        activity_value = 'Walking'
+    elif segment_by == gc.columns.ARM_LABEL:
+        segment_nr_colname = gc.columns.TRUE_SEGMENT_NR
+        segment_cat_colname = gc.columns.TRUE_SEGMENT_CAT
+        activity_colname = gc.columns.ARM_LABEL
+        activity_value = 'Gait without other behaviours or other positions'
+    elif segment_by == gc.columns.PRED_OTHER_ARM_ACTIVITY:
+        segment_nr_colname = gc.columns.PRED_SEGMENT_NR
+        segment_cat_colname = gc.columns.PRED_SEGMENT_CAT
+        activity_colname = gc.columns.PRED_OTHER_ARM_ACTIVITY
+        activity_value = 0
+    else:
+        raise ValueError('Invalid segment_by')
 
     # Load timestamps for both sides
     df_ts_mas = load_arm_activity_timestamps(subject, gc.descriptives.MOST_AFFECTED_SIDE)
@@ -526,14 +535,16 @@ def generate_results_quantification(subject: str) -> tuple[dict, pd.DataFrame]:
     df_ts_exploded = df_ts.explode(gc.columns.TIME)
 
     # Load arm activity predictions
-    df_predictions = pd.read_pickle(os.path.join(gc.paths.PATH_ARM_ACTIVITY_PREDICTIONS, gc.classifiers.LOGISTIC_REGRESSION, f'{subject}.pkl'))
+    df_predictions_ts = pd.read_pickle(os.path.join(gc.paths.PATH_ARM_ACTIVITY_PREDICTIONS, gc.classifiers.LOGISTIC_REGRESSION, f'{subject}.pkl'))
+    df_predictions = pd.read_pickle(os.path.join(gc.paths.PATH_ARM_ACTIVITY_PREDICTIONS, gc.classifiers.LOGISTIC_REGRESSION, f'{subject}_df.pkl'))
 
     # Set pred rounded based on the threshold
+    df_predictions_ts[gc.columns.PRED_OTHER_ARM_ACTIVITY] = (df_predictions_ts[gc.columns.PRED_OTHER_ARM_ACTIVITY_PROBA] >= classification_threshold).astype(int)
     df_predictions[gc.columns.PRED_OTHER_ARM_ACTIVITY] = (df_predictions[gc.columns.PRED_OTHER_ARM_ACTIVITY_PROBA] >= classification_threshold).astype(int)
 
     # Add predictions to raw data
-    df = pd.merge(
-        left=df_predictions, 
+    df_ts = pd.merge(
+        left=df_predictions_ts, 
         right=df_ts_exploded, 
         how='left', 
         on=[gc.columns.TIME, gc.columns.SIDE]
@@ -543,21 +554,28 @@ def generate_results_quantification(subject: str) -> tuple[dict, pd.DataFrame]:
     df_raw_las = pd.read_pickle(os.path.join(gc.paths.PATH_PREPARED_DATA, f'{subject}_{gc.descriptives.LEAST_AFFECTED_SIDE}.pkl')).assign(side=gc.descriptives.LEAST_AFFECTED_SIDE)
     df_raw = pd.concat([df_raw_mas, df_raw_las], axis=0)
 
-    df_raw = add_segment_category(df=df_raw, time_colname=gc.columns.TIME, activity_colname=gc.columns.FREE_LIVING_LABEL, segment_gap_s=gc.parameters.SEGMENT_GAP_GAIT, gait_value='Walking')
+    df_raw = add_segment_category(df=df_raw, time_colname=gc.columns.TIME, segment_nr_colname=segment_nr_colname,
+                                segment_cat_colname=segment_cat_colname, activity_colname=activity_colname,
+                                segment_gap_s=gc.parameters.SEGMENT_GAP_GAIT, activity_value=activity_value)
+    
+    if subject in gc.participant_ids.L_HC_IDS:
+        df_raw[gc.columns.PRE_OR_POST] = gc.descriptives.CONTROLS
 
     # Merge annotations
-    df = pd.merge(left=df, right=df_raw[[
-        gc.columns.TIME, gc.columns.SIDE, gc.columns.PRE_OR_POST, gc.columns.FREE_LIVING_LABEL, 
-        gc.columns.ARM_LABEL, gc.columns.SEGMENT_NR, gc.columns.SEGMENT_CAT
-        ]],
+    l_merge_cols = [gc.columns.TIME, gc.columns.SIDE, gc.columns.PRE_OR_POST, gc.columns.FREE_LIVING_LABEL, segment_nr_colname, segment_cat_colname]
+    if subject in gc.participant_ids.L_PD_IDS:
+        l_merge_cols += [gc.columns.ARM_LABEL]
+
+    df_ts = pd.merge(left=df_ts, right=df_raw[l_merge_cols],
         how='left', on=[gc.columns.SIDE, gc.columns.TIME]
     )
 
     # Set other arm activity boolean
-    df.loc[df[gc.columns.ARM_LABEL]=='Gait without other behaviours or other positions', 'other_arm_activity_boolean'] = 0
-    df.loc[df[gc.columns.ARM_LABEL]!='Gait without other behaviours or other positions', 'other_arm_activity_boolean'] = 1
-    df.loc[df[gc.columns.ARM_LABEL]=='Holding an object behind ', gc.columns.ARM_LABEL] = 'Holding an object behind'
-    df[gc.columns.ARM_LABEL] = df.loc[~df[gc.columns.ARM_LABEL].isna(), gc.columns.ARM_LABEL].apply(lambda x: mp.arm_labels_rename[x])
+    if subject in gc.participant_ids.L_PD_IDS:
+        df_ts.loc[df_ts[gc.columns.ARM_LABEL]=='Gait without other behaviours or other positions', 'other_arm_activity_boolean'] = 0
+        df_ts.loc[df_ts[gc.columns.ARM_LABEL]!='Gait without other behaviours or other positions', 'other_arm_activity_boolean'] = 1
+        df_ts.loc[df_ts[gc.columns.ARM_LABEL]=='Holding an object behind ', gc.columns.ARM_LABEL] = 'Holding an object behind'
+        df_ts[gc.columns.ARM_LABEL] = df_ts.loc[~df_ts[gc.columns.ARM_LABEL].isna(), gc.columns.ARM_LABEL].apply(lambda x: mp.arm_labels_rename[x])
 
      # Load arm activity features for both sides
     df_features_mas = load_arm_activity_features(subject, gc.descriptives.MOST_AFFECTED_SIDE)
@@ -568,39 +586,71 @@ def generate_results_quantification(subject: str) -> tuple[dict, pd.DataFrame]:
     df_features['peak_velocity'] = (df_features['forward_peak_ang_vel_mean'] + df_features['backward_peak_ang_vel_mean']) / 2
     df_features = df_features.drop(columns=[gc.columns.TIME])
 
+    if subject in gc.participant_ids.L_HC_IDS:
+        df_features[gc.columns.PRE_OR_POST] = gc.descriptives.CONTROLS
+
     # Merge features with exploded timestamps
-    df = pd.merge(
+    l_merge_cols = [gc.columns.SIDE, gc.columns.PRE_OR_POST, gc.columns.WINDOW_NR]
+    df_ts = pd.merge(
         left=df_features, 
-        right=df, 
+        right=df_ts, 
         how='right', 
-        on=[gc.columns.SIDE, gc.columns.PRE_OR_POST, gc.columns.WINDOW_NR]
+        on=l_merge_cols
     )
+
+    # Map windows to segment categories using majority voting
+    true_segment_counts = df_ts.groupby([gc.columns.WINDOW_NR, segment_cat_colname]).size().reset_index(name='count')
+
+    max_true_segment_per_window = true_segment_counts.sort_values(by=[gc.columns.WINDOW_NR, 'count'], ascending=[True, False]) \
+                                        .drop_duplicates(subset=gc.columns.WINDOW_NR, keep='first')
+
+    df = pd.merge(
+        left=df_features,
+        right=df_predictions[[gc.columns.SIDE, gc.columns.WINDOW_NR, gc.columns.PRED_OTHER_ARM_ACTIVITY]],
+        how='right',
+        on=[gc.columns.SIDE, gc.columns.WINDOW_NR]
+    )
+
+    df = pd.merge(
+        left=df,
+        right=max_true_segment_per_window[[gc.columns.WINDOW_NR, segment_cat_colname]],
+        how='left',
+        on=gc.columns.WINDOW_NR
+    )
+
+    if use_timestamps:
+        true_value_colname = 'other_arm_activity_boolean'
+        # Group by relevant columns and compute mean for features
+        l_groupby_cols = [gc.columns.SIDE, gc.columns.WINDOW_NR, gc.columns.PRE_OR_POST, segment_cat_colname, gc.columns.PRED_OTHER_ARM_ACTIVITY]
+        if subject in gc.participant_ids.L_PD_IDS:
+            l_groupby_cols += [true_value_colname]
+
+        df = df_ts.groupby(l_groupby_cols)[['peak_velocity', 'range_of_motion']].mean().reset_index()
     
-    # Group by relevant columns and compute mean for features
-    df = df.groupby([
-        gc.columns.TIME, gc.columns.SIDE,
-        gc.columns.WINDOW_NR, gc.columns.PRE_OR_POST,
-        gc.columns.SEGMENT_CAT, gc.columns.PRED_OTHER_ARM_ACTIVITY,
-        'other_arm_activity_boolean']
-    )[['peak_velocity', 'range_of_motion']].mean().reset_index()
+    else:
+        true_value_colname = 'other_arm_activity_majority_voting'
+        l_groupby_cols = [gc.columns.SIDE, gc.columns.WINDOW_NR, gc.columns.PRE_OR_POST, segment_cat_colname, gc.columns.PRED_OTHER_ARM_ACTIVITY]
+        if subject in gc.participant_ids.L_PD_IDS:
+            l_groupby_cols += [true_value_colname]
+        df = df.groupby(l_groupby_cols)[['peak_velocity', 'range_of_motion']].mean().reset_index()
 
     d_quantification = {}
 
     # Compute unfiltered gait aggregations
-    d_quantification['unfiltered_gait'] = compute_aggregations(df)
+    d_quantification['unfiltered_gait'] = compute_aggregations(subject, df, segment_cat_colname=segment_cat_colname, use_timestamps=use_timestamps)
 
     # Compute filtered gait aggregations
-    d_quantification['filtered_gait'] = compute_aggregations(df.loc[df[gc.columns.PRED_OTHER_ARM_ACTIVITY] == 0])
+    d_quantification['filtered_gait'] = compute_aggregations(subject, df.loc[df[gc.columns.PRED_OTHER_ARM_ACTIVITY] == 0], segment_cat_colname=segment_cat_colname, use_timestamps=use_timestamps)
 
     # Compute annotated no other arm activity for specific participants
     if subject in gc.participant_ids.L_PD_IDS:
         df_diff = pd.DataFrame()
-        d_quantification['true_no_other_arm_activity'] = compute_aggregations(df.loc[df['other_arm_activity_boolean'] == 0])
+        d_quantification['true_no_other_arm_activity'] = compute_aggregations(subject, df.loc[df[true_value_colname] == 0], segment_cat_colname=segment_cat_colname, use_timestamps=use_timestamps)
 
         df = df.loc[df[gc.columns.SIDE]=='MAS']
 
-        es_mrom, diff_mrom = compute_effect_size(df, 'range_of_motion', 'median')
-        es_prom, diff_prom = compute_effect_size(df, 'range_of_motion', '95')
+        es_mrom, diff_mrom = compute_effect_size(df, 'range_of_motion', 'median', segment_cat_colname=segment_cat_colname)
+        es_prom, diff_prom = compute_effect_size(df, 'range_of_motion', '95', segment_cat_colname=segment_cat_colname)
 
         d_quantification['effect_size'] = {
             'median_rom': es_mrom,
@@ -629,24 +679,32 @@ def generate_results(subject, step):
             segment_gap_s=1.5
         )
 
+        if subject in gc.participant_ids.L_PD_IDS:
+            d_output['clinical'] = generate_clinical_scores(subject)
+
         json_filename = f'{subject}.json'
 
         with open(os.path.join(gc.paths.PATH_OUTPUT, 'classification_performance', step, json_filename), 'w') as f:
             json.dump(d_output, f, indent=4)
+
         return 
 
     else:
-        # Only run generate_results_quantification if subject is in L_PD_IDS
-        if subject in gc.participant_ids.L_PD_IDS:
+        segment_by = gc.columns.FREE_LIVING_LABEL
+
+        if subject in gc.participant_ids.L_PD_IDS + gc.participant_ids.L_HC_IDS:
             print(f"Processing {subject} - {step}...")
-            d_output, df_diff = generate_results_quantification(subject)
 
             json_filename = f'{subject}.json'
             pkl_filename = f'{subject}.pkl'
 
+            if subject in gc.participant_ids.L_PD_IDS:
+                d_output, df_diff = generate_results_quantification(subject, segment_by)
+                df_diff.to_pickle(os.path.join(gc.paths.PATH_OUTPUT, 'quantification', pkl_filename))
+            else:
+                d_output = generate_results_quantification(subject, segment_by)
+
             with open(os.path.join(gc.paths.PATH_OUTPUT, 'quantification', json_filename), 'w') as f:
                 json.dump(d_output, f, indent=4)
-
-            df_diff.to_pickle(os.path.join(gc.paths.PATH_OUTPUT, 'quantification', pkl_filename))
 
         return
