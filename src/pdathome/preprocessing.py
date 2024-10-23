@@ -353,7 +353,7 @@ def preprocess_filtering_gait(subject):
         )
 
         # Determine the extrema (minima and maxima) of the angle signal
-        df_windowed = extract_angle_extremes(
+        extract_angle_extremes(
                 df=df_windowed,
                 angle_colname=gc.columns.ANGLE,
                 dominant_frequency_colname=f'{gc.columns.ANGLE}_dominant_frequency',
