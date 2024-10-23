@@ -133,22 +133,18 @@ def preprocess_gait_detection(subject):
         config.list_value_cols += [gc.columns.TIME, gc.columns.FREE_LIVING_LABEL]
         l_ts_cols = [gc.columns.TIME, gc.columns.WINDOW_NR]
         l_export_cols = [gc.columns.TIME, gc.columns.WINDOW_NR, gc.columns.ACTIVITY_LABEL_MAJORITY_VOTING, gc.columns.GAIT_MAJORITY_VOTING] + list(config.d_channels_values.keys())
-        l_single_value_cols = None
+        config.single_value_cols = None
         if subject in gc.participant_ids.L_PD_IDS:
             config.list_value_cols.append(gc.columns.ARM_LABEL)
             l_ts_cols += [gc.columns.PRE_OR_POST]
             l_export_cols += [gc.columns.PRE_OR_POST, gc.columns.ARM_LABEL_MAJORITY_VOTING]
-            l_single_value_cols = [gc.columns.PRE_OR_POST]
+            config.single_value_cols = [gc.columns.PRE_OR_POST]
 
 
         df_windowed = tabulate_windows(
-                df=df,
-                window_size=config.window_length_s * gc.parameters.DOWNSAMPLED_FREQUENCY,
-                step_size=config.window_step_size_s * gc.parameters.DOWNSAMPLED_FREQUENCY,
-                time_column_name=gc.columns.TIME,
-                single_value_cols=l_single_value_cols,
-                list_value_cols=config.list_value_cols,
-                agg_func='first',
+            config=config,
+            df=df,
+            agg_func='first',
         )
         
         # store windows with timestamps for later use
@@ -288,19 +284,15 @@ def preprocess_filtering_gait(subject):
         )
 
         # Create windows of fixed length and step size from the time series
-        l_single_value_cols = [gc.columns.PRED_SEGMENT_NR]
+        arm_activity_config.single_value_cols = [gc.columns.PRED_SEGMENT_NR]
         if subject in gc.participant_ids.L_PD_IDS:
-            l_single_value_cols.append(gc.columns.PRE_OR_POST)
+            arm_activity_config.single_value_cols.append(gc.columns.PRE_OR_POST)
             arm_activity_config.list_value_cols.append(gc.columns.ARM_LABEL)
 
         l_dfs = [
             tabulate_windows(
+                config=arm_activity_config,
                 df=df[df[gc.columns.PRED_SEGMENT_NR] == segment_nr].reset_index(drop=True),
-                window_size=int(arm_activity_config.window_length_s * arm_activity_config.sampling_frequency),
-                step_size=int(arm_activity_config.window_step_size_s * arm_activity_config.sampling_frequency),
-                time_column_name=gc.columns.TIME,
-                list_value_cols=arm_activity_config.list_value_cols,
-                single_value_cols=l_single_value_cols,
             )
             for segment_nr in df[gc.columns.PRED_SEGMENT_NR].unique()
         ]
