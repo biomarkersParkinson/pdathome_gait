@@ -130,12 +130,12 @@ def preprocess_gait_detection(subject):
 
         config = GaitFeatureExtractionConfig()
 
-        config.l_data_point_level_cols += [gc.columns.TIME, gc.columns.FREE_LIVING_LABEL]
+        config.list_value_cols += [gc.columns.TIME, gc.columns.FREE_LIVING_LABEL]
         l_ts_cols = [gc.columns.TIME, gc.columns.WINDOW_NR]
         l_export_cols = [gc.columns.TIME, gc.columns.WINDOW_NR, gc.columns.ACTIVITY_LABEL_MAJORITY_VOTING, gc.columns.GAIT_MAJORITY_VOTING] + list(config.d_channels_values.keys())
         l_single_value_cols = None
         if subject in gc.participant_ids.L_PD_IDS:
-            config.l_data_point_level_cols.append(gc.columns.ARM_LABEL)
+            config.list_value_cols.append(gc.columns.ARM_LABEL)
             l_ts_cols += [gc.columns.PRE_OR_POST]
             l_export_cols += [gc.columns.PRE_OR_POST, gc.columns.ARM_LABEL_MAJORITY_VOTING]
             l_single_value_cols = [gc.columns.PRE_OR_POST]
@@ -147,7 +147,7 @@ def preprocess_gait_detection(subject):
                 step_size=config.window_step_size_s * gc.parameters.DOWNSAMPLED_FREQUENCY,
                 time_column_name=gc.columns.TIME,
                 single_value_cols=l_single_value_cols,
-                list_value_cols=config.l_data_point_level_cols,
+                list_value_cols=config.list_value_cols,
                 agg_func='first',
         )
         
@@ -209,7 +209,7 @@ def preprocess_filtering_gait(subject):
         arm_activity_config = ArmActivityFeatureExtractionConfig()
 
         imu_config.acceleration_units = 'g'
-        arm_activity_config.l_data_point_level_cols += [gc.columns.TIME]
+        arm_activity_config.list_value_cols += [gc.columns.TIME, gc.columns.FREE_LIVING_LABEL]
 
         # Extract relevant gc.columns for accelerometer data
         accel_cols = list(imu_config.d_channels_accelerometer.keys())
@@ -288,17 +288,10 @@ def preprocess_filtering_gait(subject):
         )
 
         # Create windows of fixed length and step size from the time series
-        arm_activity_config.l_data_point_level_cols += [
-            gc.columns.FREE_LIVING_LABEL
-        ]
         l_single_value_cols = [gc.columns.PRED_SEGMENT_NR]
         if subject in gc.participant_ids.L_PD_IDS:
             l_single_value_cols.append(gc.columns.PRE_OR_POST)
-            arm_activity_config.l_data_point_level_cols.append(gc.columns.ARM_LABEL)
-
-        if 'angle_smooth' in arm_activity_config.l_data_point_level_cols:
-            i_angle = arm_activity_config.l_data_point_level_cols.index('angle_smooth')
-            arm_activity_config.l_data_point_level_cols[i_angle] = 'angle'
+            arm_activity_config.list_value_cols.append(gc.columns.ARM_LABEL)
 
         l_dfs = [
             tabulate_windows(
@@ -306,7 +299,7 @@ def preprocess_filtering_gait(subject):
                 window_size=int(arm_activity_config.window_length_s * arm_activity_config.sampling_frequency),
                 step_size=int(arm_activity_config.window_step_size_s * arm_activity_config.sampling_frequency),
                 time_column_name=gc.columns.TIME,
-                list_value_cols=arm_activity_config.l_data_point_level_cols,
+                list_value_cols=arm_activity_config.list_value_cols,
                 single_value_cols=l_single_value_cols,
             )
             for segment_nr in df[gc.columns.PRED_SEGMENT_NR].unique()
