@@ -4,15 +4,13 @@ import numpy as np
 import os
 import pandas as pd
 
-from typing import Union, List
-
 from collections import Counter
 from scipy.interpolate import CubicSpline
 
-from paradigma.feature_extraction import extract_temporal_domain_features, extract_spectral_domain_features, \
+from paradigma.gait.feature_extraction import extract_temporal_domain_features, extract_spectral_domain_features, \
     pca_transform_gyroscope, compute_angle, remove_moving_average_angle, signal_to_ffts, get_dominant_frequency, \
     compute_perc_power, extract_angle_extremes, extract_range_of_motion, extract_peak_angular_velocity
-from paradigma.gait_analysis_config import GaitFeatureExtractionConfig, ArmSwingFeatureExtractionConfig
+from paradigma.gait.gait_analysis_config import GaitFeatureExtractionConfig, ArmSwingFeatureExtractionConfig
 from paradigma.imu_preprocessing import butterworth_filter
 from paradigma.preprocessing_config import IMUPreprocessingConfig
 from paradigma.windowing import tabulate_windows, create_segments, discard_segments, categorize_segments
@@ -20,10 +18,6 @@ from paradigma.windowing import tabulate_windows, create_segments, discard_segme
 from pdathome.constants import global_constants as gc, mappings as mp
 from pdathome.load import load_stage_start_end, load_sensor_data, load_video_annotations
 from pdathome.utils import save_to_pickle
-
-
-import pandas as pd
-import numpy as np
 
 
 def prepare_data(subject):

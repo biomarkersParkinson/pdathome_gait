@@ -9,11 +9,11 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.exceptions import ConvergenceWarning
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import roc_curve, make_scorer, roc_auc_score
-from sklearn.model_selection import GridSearchCV, RandomizedSearchCV
+from sklearn.model_selection import RandomizedSearchCV
 from sklearn.preprocessing import StandardScaler
 from typing import Callable, List
 
-from paradigma.gait_analysis_config import GaitFeatureExtractionConfig, ArmSwingFeatureExtractionConfig
+from paradigma.gait.gait_analysis_config import GaitFeatureExtractionConfig, ArmSwingFeatureExtractionConfig
 
 from pdathome.constants import global_constants as gc
 from pdathome.load import load_dataframes_directory
