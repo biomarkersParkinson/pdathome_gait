@@ -10,7 +10,7 @@ from scipy.interpolate import CubicSpline
 from paradigma.gait.feature_extraction import extract_temporal_domain_features, extract_spectral_domain_features, \
     pca_transform_gyroscope, compute_angle, remove_moving_average_angle, signal_to_ffts, get_dominant_frequency, \
     compute_perc_power, extract_angle_extremes, extract_range_of_motion, extract_peak_angular_velocity
-from paradigma.gait.gait_analysis_config import GaitFeatureExtractionConfig, ArmSwingFeatureExtractionConfig
+from paradigma.gait.gait_analysis_config import GaitFeatureExtractionConfig, ArmActivityFeatureExtractionConfig
 from paradigma.imu_preprocessing import butterworth_filter
 from paradigma.preprocessing_config import IMUPreprocessingConfig
 from paradigma.windowing import tabulate_windows, create_segments, discard_segments, categorize_segments
@@ -206,7 +206,7 @@ def preprocess_filtering_gait(subject):
         df_pred_side = df_pred.loc[df_pred[gc.columns.SIDE]==side].copy()
 
         imu_config = IMUPreprocessingConfig()
-        arm_activity_config = ArmSwingFeatureExtractionConfig()
+        arm_activity_config = ArmActivityFeatureExtractionConfig()
 
         imu_config.acceleration_units = 'g'
         arm_activity_config.l_data_point_level_cols += [gc.columns.TIME]
