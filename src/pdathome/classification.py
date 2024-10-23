@@ -13,7 +13,7 @@ from sklearn.model_selection import RandomizedSearchCV
 from sklearn.preprocessing import StandardScaler
 from typing import Callable, List
 
-from paradigma.gait.gait_analysis_config import GaitFeatureExtractionConfig, ArmSwingFeatureExtractionConfig
+from paradigma.gait.gait_analysis_config import GaitFeatureExtractionConfig, ArmActivityFeatureExtractionConfig
 
 from pdathome.constants import global_constants as gc
 from pdathome.load import load_dataframes_directory
@@ -102,7 +102,7 @@ def train_test_filtering_gait(subject, l_classifiers, gsearch=False, n_jobs=-1):
         train_test(
             subject=subject,
             l_ids=gc.participant_ids.L_PD_IDS,
-            config_class=ArmSwingFeatureExtractionConfig,
+            config_class=ArmActivityFeatureExtractionConfig,
             l_classifiers=l_classifiers,
             target_column_name=gc.columns.OTHER_ARM_ACTIVITY_MAJORITY_VOTING,
             pred_proba_colname=gc.columns.PRED_OTHER_ARM_ACTIVITY_PROBA,
