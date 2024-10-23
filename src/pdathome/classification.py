@@ -286,7 +286,7 @@ def store_model_output(df, classifier_name, step, n_jobs=-1):
     else:
         class_weight = 'balanced'
         target_column_name = gc.columns.OTHER_ARM_ACTIVITY_MAJORITY_VOTING
-        config = ArmSwingFeatureExtractionConfig()
+        config = ArmActivityFeatureExtractionConfig()
 
     l_predictors = list(config.d_channels_values.keys())
     l_predictors_scaled = [x for x in l_predictors if 'dominant' not in x]
