@@ -95,7 +95,8 @@ def populate_segment_aggregates(df, df_agg_segments, d_quant, l_measures, segmen
                     
             d_quant[med_stage][affected_side]['seconds']['non_gait'] = np.sum(
                 [d_quant[med_stage][affected_side]['seconds'][segment_category] 
-                 for segment_category in ['short', 'moderately_long', 'long', 'very_long']
+                 for segment_category in d_quant[med_stage][affected_side]['seconds'].keys() 
+                 if segment_category in ['short', 'moderately_long', 'long', 'very_long']
                 ])
 
 
