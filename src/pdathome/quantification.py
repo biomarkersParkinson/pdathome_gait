@@ -78,7 +78,7 @@ def populate_segment_aggregates(df, df_agg_segments, d_quant, l_measures, segmen
         df_med_stage = df_agg_segments.loc[df_agg_segments[gc.columns.PRE_OR_POST] == med_stage]
         for affected_side in df_med_stage[gc.columns.SIDE].unique():
             df_aff = df_med_stage.loc[df_med_stage[gc.columns.SIDE] == affected_side]
-            for segment_category in list(df_aff[segment_cat_colname].unique()) + ['non_gait']:
+            for segment_category in list(df_aff[segment_cat_colname].unique()):
                 segment_seconds = df.loc[
                     (df[gc.columns.PRE_OR_POST] == med_stage) &
                     (df[gc.columns.SIDE] == affected_side) &
@@ -92,6 +92,11 @@ def populate_segment_aggregates(df, df_agg_segments, d_quant, l_measures, segmen
                 for measure in l_measures:
                     d_quant[med_stage][affected_side]['values'][measure][segment_category] = \
                         df_aff.loc[df_aff[segment_cat_colname] == segment_category, measure].values[0]
+                    
+            d_quant[med_stage][affected_side]['seconds']['non_gait'] = np.sum(
+                [d_quant[med_stage][affected_side]['seconds'][segment_category] 
+                 for segment_category in ['short', 'moderately_long', 'long', 'very_long']
+                ])
 
 
 def compute_aggregations(subject, df, segment_cat_colname, use_timestamps):
