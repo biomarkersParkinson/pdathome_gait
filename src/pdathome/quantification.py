@@ -78,7 +78,7 @@ def populate_segment_aggregates(df, df_agg_segments, d_quant, l_measures, segmen
         df_med_stage = df_agg_segments.loc[df_agg_segments[gc.columns.PRE_OR_POST] == med_stage]
         for affected_side in df_med_stage[gc.columns.SIDE].unique():
             df_aff = df_med_stage.loc[df_med_stage[gc.columns.SIDE] == affected_side]
-            for segment_category in df_aff[segment_cat_colname].unique():
+            for segment_category in list(df_aff[segment_cat_colname].unique()) + ['non_gait']:
                 segment_seconds = df.loc[
                     (df[gc.columns.PRE_OR_POST] == med_stage) &
                     (df[gc.columns.SIDE] == affected_side) &
@@ -92,19 +92,6 @@ def populate_segment_aggregates(df, df_agg_segments, d_quant, l_measures, segmen
                 for measure in l_measures:
                     d_quant[med_stage][affected_side]['values'][measure][segment_category] = \
                         df_aff.loc[df_aff[segment_cat_colname] == segment_category, measure].values[0]
-
-    # Compute non-gait time
-    compute_non_gait_time(d_quant)
-
-
-def compute_non_gait_time(d_quant):
-    """Calculates and adds non-gait time to the dictionary."""
-    for med_stage in d_quant.keys():
-        for affected_side in d_quant[med_stage].keys():
-            gait_seconds = np.sum([d_quant[med_stage][affected_side]['seconds'][seg] 
-                                   for seg in mp.segment_map.keys() if seg in d_quant[med_stage][affected_side]['seconds']])
-            overall_seconds = d_quant[med_stage][affected_side]['seconds']['overall']
-            d_quant[med_stage][affected_side]['seconds']['non_gait'] = overall_seconds - gait_seconds
 
 
 def compute_aggregations(subject, df, segment_cat_colname, use_timestamps):
