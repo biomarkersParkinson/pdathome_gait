@@ -378,9 +378,9 @@ def preprocess_filtering_gait(subject):
 
         # Compute aggregated measures of the peak angular velocity
         for dir in ['forward', 'backward']:
-            df_windowed[f'{dir}_peak_ang_vel_mean'] = df_windowed[f'{dir}_peak_ang_vel'].apply(lambda x: np.mean(x) if len(x) > 0 else 0)
-            df_windowed[f'{dir}_peak_ang_vel_std'] = df_windowed[f'{dir}_peak_ang_vel'].apply(lambda x: np.std(x) if len(x) > 0 else 0)
-            df_windowed = df_windowed.drop(columns=[f'{dir}_peak_ang_vel'])
+            df_windowed[f'{dir}_peak_{gc.columns.VELOCITY}_mean'] = df_windowed[f'{dir}_peak_{gc.columns.VELOCITY}'].apply(lambda x: np.mean(x) if len(x) > 0 else 0)
+            df_windowed[f'{dir}_peak_{gc.columns.VELOCITY}_std'] = df_windowed[f'{dir}_peak_{gc.columns.VELOCITY}'].apply(lambda x: np.std(x) if len(x) > 0 else 0)
+            df_windowed = df_windowed.drop(columns=[f'{dir}_peak_{gc.columns.VELOCITY}'])
 
         # Compute statistics of the temporal domain accelerometer signals
         df_windowed = extract_temporal_domain_features(arm_activity_config, df_windowed, l_gravity_stats=['mean', 'std'])
