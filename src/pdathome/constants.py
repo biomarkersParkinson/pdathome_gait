@@ -44,7 +44,7 @@ class Paths:
             PATH_OUTPUT = PATH_OUTPUT,
             PATH_CLASSIFIERS = os.path.join(PATH_OUTPUT, 'classifiers'),
             PATH_SCALERS = os.path.join(PATH_OUTPUT, 'scalers'),
-            PATH_THRESHOLDS = os.path.join(PATH_OUTPUT, 'classification_thresholds'),
+            PATH_THRESHOLDS = os.path.join(PATH_OUTPUT, 'thresholds'),
             PATH_COEFFICIENTS = os.path.join(PATH_OUTPUT, 'feature_coefficients'),
             PATH_PREPROCESSED_DATA = PATH_PREPROCESSED_DATA,
             PATH_PREPARED_DATA = os.path.join(PATH_PREPROCESSED_DATA, '0.prepared_data'),

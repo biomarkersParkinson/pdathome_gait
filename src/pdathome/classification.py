@@ -346,7 +346,7 @@ def store_model_output(df, classifier_name, step, n_jobs=-1):
         'scale': scaler.scale_.tolist()
     }
 
-    scaler_path = os.path.join(gc.paths.PATH_SCALERS, step, f'scaler_params.json')
+    scaler_path = os.path.join(gc.paths.PATH_SCALERS, step, 'scaler_pdh_params.json')
 
     if not os.path.exists(gc.paths.PATH_SCALERS):
         os.makedirs(gc.paths.PATH_SCALERS)
