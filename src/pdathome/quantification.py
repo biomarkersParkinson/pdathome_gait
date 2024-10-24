@@ -100,7 +100,7 @@ def populate_segment_aggregates(df, df_agg_segments, d_quant, l_measures, segmen
                 ])
 
 
-def compute_aggregations(subject, df, segment_cat_colname, use_timestamps):
+def compute_aggregations(df, segment_cat_colname, use_timestamps):
 
     l_metrics = ['range_of_motion', 'peak_velocity']
     l_aggregates = ['median']

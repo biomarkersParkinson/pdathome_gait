@@ -638,15 +638,15 @@ def generate_results_quantification(subject: str, segment_by: str) -> tuple[dict
     d_quantification = {}
 
     # Compute unfiltered gait aggregations
-    d_quantification['unfiltered_gait'] = compute_aggregations(subject, df, segment_cat_colname=segment_cat_colname, use_timestamps=use_timestamps)
+    d_quantification['unfiltered_gait'] = compute_aggregations(df, segment_cat_colname=segment_cat_colname, use_timestamps=use_timestamps)
 
     # Compute filtered gait aggregations
-    d_quantification['filtered_gait'] = compute_aggregations(subject, df.loc[df[gc.columns.PRED_OTHER_ARM_ACTIVITY] == 0], segment_cat_colname=segment_cat_colname, use_timestamps=use_timestamps)
+    d_quantification['filtered_gait'] = compute_aggregations(df.loc[df[gc.columns.PRED_OTHER_ARM_ACTIVITY] == 0], segment_cat_colname=segment_cat_colname, use_timestamps=use_timestamps)
 
     # Compute annotated no other arm activity for specific participants
     if subject in gc.participant_ids.L_PD_IDS:
         df_diff = pd.DataFrame()
-        d_quantification['true_no_other_arm_activity'] = compute_aggregations(subject, df.loc[df[true_value_colname] == 0], segment_cat_colname=segment_cat_colname, use_timestamps=use_timestamps)
+        d_quantification['true_no_other_arm_activity'] = compute_aggregations(df.loc[df[true_value_colname] == 0], segment_cat_colname=segment_cat_colname, use_timestamps=use_timestamps)
 
         df = df.loc[df[gc.columns.SIDE]=='MAS']
 
