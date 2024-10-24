@@ -69,13 +69,14 @@ def plot_coefs(d_coefs, classifier, color=gc.plot_parameters.COLOR_PALETTE_FIRST
     plt.show()
 
 
-def plot_n_subjects(d_performance, x_loc, ax):
+def plot_n_subjects(d_performance, x_loc, y_loc, ax):
     for j, label in enumerate(d_performance.keys()):
         l_spec = len(d_performance[label])
+        y_loc_label = y_loc+(j-1)*1
         if l_spec == 1:
-            ax.text(x_loc, j*1, f"{l_spec} subject")
+            ax.text(x_loc, y_loc_label, f"{l_spec} subject")
         elif l_spec > 0:
-            ax.text(x_loc, j*1, f"{l_spec} subjects")
+            ax.text(x_loc, y_loc_label, f"{l_spec} subjects")
 
 
 def plot_significance(ax, x_min, x_max, pvalue, y_min_significance, gap, row, text_size, color='k'):
@@ -583,7 +584,7 @@ def generate_results_quantification(subject: str, segment_by: str) -> tuple[dict
     df_features = pd.concat([df_features_mas, df_features_las], axis=0)
 
     # Combine features and preprocess
-    df_features['peak_velocity'] = (df_features['forward_peak_ang_vel_mean'] + df_features['backward_peak_ang_vel_mean']) / 2
+    df_features['peak_velocity'] = (df_features[f'forward_peak_{gc.columns.VELOCITY}_mean'] + df_features[f'backward_peak_{gc.columns.VELOCITY}_mean']) / 2
     df_features = df_features.drop(columns=[gc.columns.TIME])
 
     if subject in gc.participant_ids.L_HC_IDS:
