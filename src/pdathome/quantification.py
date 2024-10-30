@@ -161,7 +161,7 @@ def compute_effect_size(df, parameter, stat, segment_cat_colname):
     - df (pd.DataFrame): DataFrame containing the data.
     - parameter (str): The parameter column to analyze.
     - stat (str): The point estimate statistic ('median' or '95').
-    - use_bootstrap_std (bool): Whether to use bootstrapped standard deviation (True) or pooled standard deviation (False).
+    - segment_cat_colname (str): Column name for segment category.
     
     Returns:
     - d_effect_size (dict): Dictionary containing effect size information.
@@ -224,7 +224,7 @@ def compute_effect_size(df, parameter, stat, segment_cat_colname):
                     
                 # Handle the case where std_bootstrap is zero
                 if std_bootstrap == 0:
-                    d_effect_size[dataset][segment_category]['effect_size'] = np.nan  # or some other value indicating no effect size
+                    d_effect_size[dataset][segment_category]['effect_size'] = np.nan 
                 else:
                     d_effect_size[dataset][segment_category]['effect_size'] = (mu_post - mu_pre) / std_bootstrap
                 
