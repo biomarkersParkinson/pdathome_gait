@@ -38,7 +38,9 @@ def train_test(
     config = config_class()
 
     # Define predictors
-    l_predictors = list(config.d_channels_values.keys())
+    l_drop_cols = ['range_of_motion', 'forward_peak_velocity_mean', 'backward_peak_velocity_mean',
+                   'forward_peak_velocity_std', 'backward_peak_velocity_std']
+    l_predictors = [x for x in list(config.d_channels_values.keys()) if x not in l_drop_cols]
     l_predictors_scale = [x for x in l_predictors if 'dominant' not in x]
 
     df_all_subjects = load_dataframes_directory(
@@ -288,7 +290,9 @@ def store_model_output(df, classifier_name, step, n_jobs=-1):
         target_column_name = gc.columns.OTHER_ARM_ACTIVITY_MAJORITY_VOTING
         config = ArmActivityFeatureExtractionConfig()
 
-    l_predictors = list(config.d_channels_values.keys())
+    l_drop_cols = ['range_of_motion', 'forward_peak_velocity_mean', 'backward_peak_velocity_mean',
+                   'forward_peak_velocity_std', 'backward_peak_velocity_std']
+    l_predictors = [x for x in list(config.d_channels_values.keys()) if x not in l_drop_cols]
     l_predictors_scaled = [x for x in l_predictors if 'dominant' not in x]
 
     # Standardize features based on the PD subjects    
