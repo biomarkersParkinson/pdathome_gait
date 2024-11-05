@@ -220,42 +220,30 @@ def generate_results_classification(step, subject, segment_gap_s):
             pred_colname = gc.columns.PRED_GAIT
             label_colname = gc.columns.FREE_LIVING_LABEL
 
-            # Metrics
-            metric_to_correct = 'sens'
-            arm_label_metric = 'sens'
-
             # Labels
             boolean_colname = 'gait'
             value_label = 'Walking'
 
-            # Values
-            outcome_value = 1 # Walking
-
-            # Classification threshold
-            with open(os.path.join(gc.paths.PATH_THRESHOLDS, step, f'{model}.txt'), 'r') as f:
-                clf_threshold = float(f.read())
         else:
             # Paths
             path_predictions = gc.paths.PATH_ARM_ACTIVITY_PREDICTIONS
 
             # Columns
-            pred_proba_colname = gc.columns.PRED_OTHER_ARM_ACTIVITY_PROBA
-            pred_colname = gc.columns.PRED_OTHER_ARM_ACTIVITY
+            pred_proba_colname = gc.columns.PRED_NO_OTHER_ARM_ACTIVITY_PROBA
+            pred_colname = gc.columns.PRED_NO_OTHER_ARM_ACTIVITY
             label_colname = gc.columns.ARM_LABEL
 
             # Labels
-            boolean_colname = 'other_arm_activity'
+            boolean_colname = 'no_other_arm_activity'
             value_label = 'Gait without other behaviours or other positions'
 
-            # Metrics
-            metric_to_correct = 'spec'
-            arm_label_metric = 'sens'
+        with open(os.path.join(gc.paths.PATH_THRESHOLDS, step, f'{model}.txt'), 'r') as f:
+            clf_threshold = float(f.read())
 
-            # Values
-            outcome_value = 0 # No other arm activity
-
-            with open(os.path.join(gc.paths.PATH_THRESHOLDS, step, f'{model}.txt'), 'r') as f:
-                clf_threshold = float(f.read())
+        # Metrics
+        metric_to_correct = 'sens'
+        arm_label_metric = 'sens'
+        outcome_value = 1 # 'Walking' or 'Gait without other behaviours or other positions'
 
         l_raw_cols = [gc.columns.TIME, gc.columns.SIDE, gc.columns.FREE_LIVING_LABEL]
         l_segment_cats = []
@@ -506,7 +494,6 @@ def load_arm_activity_timestamps(subject: str, side: str) -> pd.DataFrame:
 
 def generate_results_quantification(subject: str, segment_by: str) -> tuple[dict, pd.DataFrame]:
     """Generate quantification results for a given subject."""
-    classification_threshold = 0.5
     use_timestamps = False
 
     if segment_by == gc.columns.FREE_LIVING_LABEL:
@@ -519,11 +506,11 @@ def generate_results_quantification(subject: str, segment_by: str) -> tuple[dict
         segment_cat_colname = gc.columns.TRUE_SEGMENT_CAT
         activity_colname = gc.columns.ARM_LABEL
         activity_value = 'Gait without other behaviours or other positions'
-    elif segment_by == gc.columns.PRED_OTHER_ARM_ACTIVITY:
+    elif segment_by == gc.columns.PRED_NO_OTHER_ARM_ACTIVITY:
         segment_nr_colname = gc.columns.PRED_SEGMENT_NR
         segment_cat_colname = gc.columns.PRED_SEGMENT_CAT
-        activity_colname = gc.columns.PRED_OTHER_ARM_ACTIVITY
-        activity_value = 0
+        activity_colname = gc.columns.PRED_NO_OTHER_ARM_ACTIVITY
+        activity_value = 1
     else:
         raise ValueError('Invalid segment_by')
 
@@ -540,8 +527,11 @@ def generate_results_quantification(subject: str, segment_by: str) -> tuple[dict
     df_predictions = pd.read_pickle(os.path.join(gc.paths.PATH_ARM_ACTIVITY_PREDICTIONS, gc.classifiers.LOGISTIC_REGRESSION, f'{subject}_df.pkl'))
 
     # Set pred rounded based on the threshold
-    df_predictions_ts[gc.columns.PRED_OTHER_ARM_ACTIVITY] = (df_predictions_ts[gc.columns.PRED_OTHER_ARM_ACTIVITY_PROBA] >= classification_threshold).astype(int)
-    df_predictions[gc.columns.PRED_OTHER_ARM_ACTIVITY] = (df_predictions[gc.columns.PRED_OTHER_ARM_ACTIVITY_PROBA] >= classification_threshold).astype(int)
+    with open(os.path.join(gc.paths.PATH_THRESHOLDS, 'arm_activity', f'{gc.classifiers.ARM_ACTIVITY_CLASSIFIER_SELECTED}.txt'), 'r') as f:
+        clf_threshold = float(f.read())
+
+    df_predictions_ts[gc.columns.PRED_NO_OTHER_ARM_ACTIVITY] = (df_predictions_ts[gc.columns.PRED_NO_OTHER_ARM_ACTIVITY_PROBA] >= clf_threshold).astype(int)
+    df_predictions[gc.columns.PRED_NO_OTHER_ARM_ACTIVITY] = (df_predictions[gc.columns.PRED_NO_OTHER_ARM_ACTIVITY_PROBA] >= clf_threshold).astype(int)
 
     # Add predictions to raw data
     df_ts = pd.merge(
@@ -573,8 +563,8 @@ def generate_results_quantification(subject: str, segment_by: str) -> tuple[dict
 
     # Set other arm activity boolean
     if subject in gc.participant_ids.L_PD_IDS:
-        df_ts.loc[df_ts[gc.columns.ARM_LABEL]=='Gait without other behaviours or other positions', 'other_arm_activity_boolean'] = 0
-        df_ts.loc[df_ts[gc.columns.ARM_LABEL]!='Gait without other behaviours or other positions', 'other_arm_activity_boolean'] = 1
+        df_ts.loc[df_ts[gc.columns.ARM_LABEL]=='Gait without other behaviours or other positions', 'no_other_arm_activity_boolean'] = 1
+        df_ts.loc[df_ts[gc.columns.ARM_LABEL]!='Gait without other behaviours or other positions', 'no_other_arm_activity_boolean'] = 0
         df_ts.loc[df_ts[gc.columns.ARM_LABEL]=='Holding an object behind ', gc.columns.ARM_LABEL] = 'Holding an object behind'
         df_ts[gc.columns.ARM_LABEL] = df_ts.loc[~df_ts[gc.columns.ARM_LABEL].isna(), gc.columns.ARM_LABEL].apply(lambda x: mp.arm_labels_rename[x])
 
@@ -607,7 +597,7 @@ def generate_results_quantification(subject: str, segment_by: str) -> tuple[dict
 
     df = pd.merge(
         left=df_features,
-        right=df_predictions[[gc.columns.SIDE, gc.columns.WINDOW_NR, gc.columns.PRED_OTHER_ARM_ACTIVITY]],
+        right=df_predictions[[gc.columns.SIDE, gc.columns.WINDOW_NR, gc.columns.PRED_NO_OTHER_ARM_ACTIVITY]],
         how='right',
         on=[gc.columns.SIDE, gc.columns.WINDOW_NR]
     )
@@ -620,17 +610,17 @@ def generate_results_quantification(subject: str, segment_by: str) -> tuple[dict
     )
 
     if use_timestamps:
-        true_value_colname = 'other_arm_activity_boolean'
+        true_value_colname = 'no_other_arm_activity_boolean'
         # Group by relevant columns and compute mean for features
-        l_groupby_cols = [gc.columns.SIDE, gc.columns.WINDOW_NR, gc.columns.PRE_OR_POST, segment_cat_colname, gc.columns.PRED_OTHER_ARM_ACTIVITY]
+        l_groupby_cols = [gc.columns.SIDE, gc.columns.WINDOW_NR, gc.columns.PRE_OR_POST, segment_cat_colname, gc.columns.PRED_NO_OTHER_ARM_ACTIVITY]
         if subject in gc.participant_ids.L_PD_IDS:
             l_groupby_cols += [true_value_colname]
 
         df = df_ts.groupby(l_groupby_cols)[['peak_velocity', 'range_of_motion']].mean().reset_index()
     
     else:
-        true_value_colname = 'other_arm_activity_majority_voting'
-        l_groupby_cols = [gc.columns.SIDE, gc.columns.WINDOW_NR, gc.columns.PRE_OR_POST, segment_cat_colname, gc.columns.PRED_OTHER_ARM_ACTIVITY]
+        true_value_colname = gc.columns.NO_OTHER_ARM_ACTIVITY_MAJORITY_VOTING
+        l_groupby_cols = [gc.columns.SIDE, gc.columns.WINDOW_NR, gc.columns.PRE_OR_POST, segment_cat_colname, gc.columns.PRED_NO_OTHER_ARM_ACTIVITY]
         if subject in gc.participant_ids.L_PD_IDS:
             l_groupby_cols += [true_value_colname]
         df = df.groupby(l_groupby_cols)[['peak_velocity', 'range_of_motion']].mean().reset_index()
@@ -641,12 +631,12 @@ def generate_results_quantification(subject: str, segment_by: str) -> tuple[dict
     d_quantification['unfiltered_gait'] = compute_aggregations(df, segment_cat_colname=segment_cat_colname, use_timestamps=use_timestamps)
 
     # Compute filtered gait aggregations
-    d_quantification['filtered_gait'] = compute_aggregations(df.loc[df[gc.columns.PRED_OTHER_ARM_ACTIVITY] == 0], segment_cat_colname=segment_cat_colname, use_timestamps=use_timestamps)
+    d_quantification['filtered_gait'] = compute_aggregations(df.loc[df[gc.columns.PRED_NO_OTHER_ARM_ACTIVITY] == 1], segment_cat_colname=segment_cat_colname, use_timestamps=use_timestamps)
 
     # Compute annotated no other arm activity for specific participants
     if subject in gc.participant_ids.L_PD_IDS:
         df_diff = pd.DataFrame()
-        d_quantification['true_no_other_arm_activity'] = compute_aggregations(df.loc[df[true_value_colname] == 0], segment_cat_colname=segment_cat_colname, use_timestamps=use_timestamps)
+        d_quantification['true_no_other_arm_activity'] = compute_aggregations(df.loc[df[true_value_colname] == 1], segment_cat_colname=segment_cat_colname, use_timestamps=use_timestamps)
 
         df = df.loc[df[gc.columns.SIDE]=='MAS']
 

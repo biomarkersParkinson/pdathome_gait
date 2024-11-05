@@ -1279,8 +1279,8 @@ tsdf = "^0.5.2"
 [package.source]
 type = "git"
 url = "https://github.com/biomarkersParkinson/paradigma"
-reference = "inverse_predictions"
-resolved_reference = "9fee8bfa4eba7576aeec0729bf12b0102461d7ca"
+reference = "main"
+resolved_reference = "dde3a754601471cc5e9f171d3ec2fed510b7e715"
 
 [[package]]
 name = "parso"
@@ -2355,4 +2355,4 @@ viz = ["cartopy", "matplotlib", "nc-time-axis", "seaborn"]
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.11"
-content-hash = "b3b64d3ab478352c5373a08d205f2147c134efa7e84486c511aa64e6b7e48332"
+content-hash = "ff55501d152b85a341ce186ceb05f89239454599c5ebe00baf560bb68f4f4d77"
