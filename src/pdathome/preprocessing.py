@@ -22,7 +22,7 @@ from pdathome.utils import save_to_pickle
 
 def prepare_data(subject):
     print(f"Time {datetime.datetime.now()} - {subject} - Starting preparing data ...")
-    with open(os.path.join(gc.gc.paths.PATH_CLINICAL_DATA, 'distribution_participants.json'), 'r') as f:
+    with open(os.path.join(gc.paths.PATH_CLINICAL_DATA, 'distribution_participants.json'), 'r') as f:
         d_participant_distribution = json.load(f)
 
     l_time_cols = [gc.columns.TIME]
