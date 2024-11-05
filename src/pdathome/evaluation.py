@@ -125,7 +125,7 @@ def hue_rule(df1, df2, hue=None):
     return colors
 
 
-def bland_altman_plot(df1, df2, *args, x=None, axs=None, hue='population', reference=None, confidence_interval=1.96, **kwargs):
+def bland_altman_plot(df1, df2, *args, x=None, axs=None, hue='population', reference=None, confidence_interval=1.96, x_loc_mult_factor=1.2, **kwargs):
     if axs is None:
         axs = plt.axes()
 
@@ -151,7 +151,7 @@ def bland_altman_plot(df1, df2, *args, x=None, axs=None, hue='population', refer
     axs.axhline(md + confidence_interval*sd, color='gray', linestyle='--')
     axs.axhline(md - confidence_interval*sd, color='gray', linestyle='--')
 
-    xOutPlot = np.min(mean) + (np.max(mean)-np.min(mean))*1.34
+    xOutPlot = np.min(mean) + (np.max(mean)-np.min(mean))*x_loc_mult_factor
 
     axs.text(xOutPlot, md - confidence_interval*sd, r'-'+str(confidence_interval)+' SD:' + "\n" + "%.2f" % CI_low, ha = "center", va = "center")
     axs.text(xOutPlot, md + confidence_interval*sd, r'+'+str(confidence_interval)+' SD:' + "\n" + "%.2f" % CI_high, ha = "center", va = "center")

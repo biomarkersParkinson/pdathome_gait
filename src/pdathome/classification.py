@@ -106,8 +106,8 @@ def train_test_filtering_gait(subject, l_classifiers, gsearch=False, n_jobs=-1):
             l_ids=gc.participant_ids.L_PD_IDS,
             config_class=ArmActivityFeatureExtractionConfig,
             l_classifiers=l_classifiers,
-            target_column_name=gc.columns.OTHER_ARM_ACTIVITY_MAJORITY_VOTING,
-            pred_proba_colname=gc.columns.PRED_OTHER_ARM_ACTIVITY_PROBA,
+            target_column_name=gc.columns.NO_OTHER_ARM_ACTIVITY_MAJORITY_VOTING,
+            pred_proba_colname=gc.columns.PRED_NO_OTHER_ARM_ACTIVITY_PROBA,
             step='arm_activity',
             gsearch=gsearch,
             path_features=gc.paths.PATH_ARM_ACTIVITY_FEATURES,
@@ -237,7 +237,7 @@ def windows_to_timestamps(subject, df, path_output, pred_proba_colname, step):
     elif step == 'arm_activity':
         path_features = gc.paths.PATH_ARM_ACTIVITY_FEATURES
         if subject in gc.participant_ids.L_PD_IDS:
-            l_subj_cols += [gc.columns.OTHER_ARM_ACTIVITY_MAJORITY_VOTING, gc.columns.ARM_LABEL_MAJORITY_VOTING]
+            l_subj_cols += [gc.columns.NO_OTHER_ARM_ACTIVITY_MAJORITY_VOTING, gc.columns.ARM_LABEL_MAJORITY_VOTING]
 
     # Select relevant gc.columns
     df = df[l_subj_cols]     
@@ -287,7 +287,7 @@ def store_model_output(df, classifier_name, step, n_jobs=-1):
         config = GaitFeatureExtractionConfig()
     else:
         class_weight = 'balanced'
-        target_column_name = gc.columns.OTHER_ARM_ACTIVITY_MAJORITY_VOTING
+        target_column_name = gc.columns.NO_OTHER_ARM_ACTIVITY_MAJORITY_VOTING
         config = ArmActivityFeatureExtractionConfig()
 
     l_drop_cols = ['range_of_motion', 'forward_peak_velocity_mean', 'backward_peak_velocity_mean',
@@ -393,13 +393,13 @@ def predict_controls(clf, scaler, classifier_name, l_predictors, l_predictors_sc
         df_subj = pd.concat([df_subj_mas, df_subj_las]).reset_index(drop=True)
 
         df_subj[l_predictors_scaled] = scaler.transform(df_subj[l_predictors_scaled])
-        df_subj[gc.columns.PRED_OTHER_ARM_ACTIVITY_PROBA] = clf.predict_proba(df_subj[l_predictors])[:,1]
-        df_subj[gc.columns.PRED_OTHER_ARM_ACTIVITY] = clf.predict(df_subj[l_predictors])
+        df_subj[gc.columns.PRED_NO_OTHER_ARM_ACTIVITY_PROBA] = clf.predict_proba(df_subj[l_predictors])[:,1]
+        df_subj[gc.columns.PRED_NO_OTHER_ARM_ACTIVITY] = clf.predict(df_subj[l_predictors])
 
         windows_to_timestamps(
             subject=subject, df=df_subj,
             path_output=os.path.join(gc.paths.PATH_ARM_ACTIVITY_PREDICTIONS, classifier_name),
-            pred_proba_colname=gc.columns.PRED_OTHER_ARM_ACTIVITY_PROBA,
+            pred_proba_colname=gc.columns.PRED_NO_OTHER_ARM_ACTIVITY_PROBA,
             step=step
         )
 

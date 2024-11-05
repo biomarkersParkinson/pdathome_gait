@@ -314,7 +314,7 @@ def preprocess_filtering_gait(subject):
 
         # Majority voting for labels per window
         if subject in gc.participant_ids.L_PD_IDS:
-            df_windowed[gc.columns.OTHER_ARM_ACTIVITY_MAJORITY_VOTING] = df_windowed[gc.columns.ARM_LABEL].apply(lambda x: x.count('Gait without other behaviours or other positions') < len(x)/2)
+            df_windowed[gc.columns.NO_OTHER_ARM_ACTIVITY_MAJORITY_VOTING] = df_windowed[gc.columns.ARM_LABEL].apply(lambda x: x.count('Gait without other behaviours or other positions') >= len(x)/2)
             df_windowed[gc.columns.ARM_LABEL_MAJORITY_VOTING] = df_windowed[gc.columns.ARM_LABEL].apply(lambda x: arm_label_majority_voting(arm_activity_config, x))
             df_windowed = df_windowed.drop(columns=[gc.columns.ARM_LABEL])
 
@@ -396,7 +396,7 @@ def preprocess_filtering_gait(subject):
         l_export_cols = [gc.columns.TIME, gc.columns.WINDOW_NR] + list(arm_activity_config.d_channels_values.keys())
 
         if subject in gc.participant_ids.L_PD_IDS:
-            l_export_cols += [gc.columns.PRE_OR_POST, gc.columns.ARM_LABEL_MAJORITY_VOTING, gc.columns.OTHER_ARM_ACTIVITY_MAJORITY_VOTING]
+            l_export_cols += [gc.columns.PRE_OR_POST, gc.columns.ARM_LABEL_MAJORITY_VOTING, gc.columns.NO_OTHER_ARM_ACTIVITY_MAJORITY_VOTING]
 
         save_to_pickle(
             df=df_windowed[l_export_cols],

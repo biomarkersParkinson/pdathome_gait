@@ -10,7 +10,7 @@ packages = [{include = "pdathome", from = "src"}]
 python = "^3.11"
 pandas = "^2.2.2"
 numpy = "^1.26.4"
-paradigma = { git = "https://github.com/biomarkersParkinson/paradigma", branch = "feature_renaming_gait" }
+paradigma = { git = "https://github.com/biomarkersParkinson/paradigma", branch = "inverse_predictions" }
 python-dotenv = "^1.0.1"
 h5py = "^3.11.0"
 scipy = "^1.14.1"

@@ -175,9 +175,9 @@ def compute_effect_size(df, parameter, stat, segment_cat_colname):
         if dataset == 'predicted_gait':
             df_subset = df.copy()
         elif dataset == 'pred_gait_predicted_noaa':
-            df_subset = df.loc[df[gc.columns.PRED_OTHER_ARM_ACTIVITY] == 0].copy()
+            df_subset = df.loc[df[gc.columns.PRED_NO_OTHER_ARM_ACTIVITY] == 1].copy()
         elif dataset == 'pred_gait_annotated_noaa':
-            df_subset = df.loc[df['other_arm_activity_majority_voting'] == 0].copy()
+            df_subset = df.loc[df['no_other_arm_activity_majority_voting'] == 1].copy()
         else:
             raise ValueError("Invalid dataset provided.")
 
