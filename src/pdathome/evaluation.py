@@ -224,6 +224,8 @@ def generate_results_classification(step, subject, segment_gap_s):
             boolean_colname = 'gait'
             value_label = 'Walking'
 
+            arm_label_metric = 'sens'
+
         else:
             # Paths
             path_predictions = gc.paths.PATH_ARM_ACTIVITY_PREDICTIONS
@@ -237,12 +239,14 @@ def generate_results_classification(step, subject, segment_gap_s):
             boolean_colname = 'no_other_arm_activity'
             value_label = 'Gait without other behaviours or other positions'
 
+            arm_label_metric = 'spec'
+
         with open(os.path.join(gc.paths.PATH_THRESHOLDS, step, f'{model}.txt'), 'r') as f:
             clf_threshold = float(f.read())
 
         # Metrics
         metric_to_correct = 'sens'
-        arm_label_metric = 'sens'
+        
         outcome_value = 1 # 'Walking' or 'Gait without other behaviours or other positions'
 
         l_raw_cols = [gc.columns.TIME, gc.columns.SIDE, gc.columns.FREE_LIVING_LABEL]
@@ -299,7 +303,7 @@ def generate_results_classification(step, subject, segment_gap_s):
 
         if step == 'arm_activity':
             activity_colname = pred_colname
-            activity_value = outcome_value
+            activity_value = 1
 
             df = add_segment_category(
                 df=df, activity_colname=activity_colname,
@@ -351,11 +355,11 @@ def generate_results_classification(step, subject, segment_gap_s):
                 }
 
                 if not (subject in gc.participant_ids.L_HC_IDS and step == 'arm_activity'):
-                    ann_seconds_true = df_med_stage.loc[df_med_stage[boolean_colname]==1].shape[0] / gc.parameters.DOWNSAMPLED_FREQUENCY
-                    ann_seconds_false = df_med_stage.loc[df_med_stage[boolean_colname]==0].shape[0] / gc.parameters.DOWNSAMPLED_FREQUENCY
+                    ann_seconds_pos = df_med_stage.loc[df_med_stage[boolean_colname]==1].shape[0] / gc.parameters.DOWNSAMPLED_FREQUENCY
+                    ann_seconds_neg = df_med_stage.loc[df_med_stage[boolean_colname]==0].shape[0] / gc.parameters.DOWNSAMPLED_FREQUENCY
 
-                    d_performance[model][affected_side][med_stage]['size']['ann_pos_s'] = ann_seconds_true
-                    d_performance[model][affected_side][med_stage]['size']['ann_neg_s'] = ann_seconds_false
+                    d_performance[model][affected_side][med_stage]['size']['ann_pos_s'] = ann_seconds_pos
+                    d_performance[model][affected_side][med_stage]['size']['ann_neg_s'] = ann_seconds_neg
 
                     for metric in ['sens', 'spec', 'auc']:
                         d_performance[model][affected_side][med_stage][metric] = calculate_metric(
