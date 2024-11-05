@@ -346,16 +346,16 @@ def generate_results_classification(step, subject, segment_gap_s):
                 pred_seconds_false = df_med_stage.loc[df_med_stage[pred_colname]==0].shape[0] / gc.parameters.DOWNSAMPLED_FREQUENCY
 
                 d_performance[model][affected_side][med_stage]['size'] = {
-                    f'pred_{boolean_colname}_s': pred_seconds_true,
-                    f'pred_no_{boolean_colname}_s': pred_seconds_false,
+                    'pred_pos_s': pred_seconds_true,
+                    'pred_neg_s': pred_seconds_false,
                 }
 
                 if not (subject in gc.participant_ids.L_HC_IDS and step == 'arm_activity'):
                     ann_seconds_true = df_med_stage.loc[df_med_stage[boolean_colname]==1].shape[0] / gc.parameters.DOWNSAMPLED_FREQUENCY
                     ann_seconds_false = df_med_stage.loc[df_med_stage[boolean_colname]==0].shape[0] / gc.parameters.DOWNSAMPLED_FREQUENCY
 
-                    d_performance[model][affected_side][med_stage]['size'][f'ann_{boolean_colname}_s'] = ann_seconds_true
-                    d_performance[model][affected_side][med_stage]['size'][f'ann_no_{boolean_colname}_s'] = ann_seconds_false
+                    d_performance[model][affected_side][med_stage]['size']['ann_pos_s'] = ann_seconds_true
+                    d_performance[model][affected_side][med_stage]['size']['ann_neg_s'] = ann_seconds_false
 
                     for metric in ['sens', 'spec', 'auc']:
                         d_performance[model][affected_side][med_stage][metric] = calculate_metric(
