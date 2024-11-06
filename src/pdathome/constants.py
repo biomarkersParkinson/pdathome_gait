@@ -174,7 +174,7 @@ class ParticipantIDs:
 
     # PD IDs pre-medication
     L_PRE_IDS: List[str] = field(default_factory=lambda: ['hbv' + x for x in [
-        'hbv115', 'hbv117', 'hbv122', 'hbv136'
+        '115', '117', '122', '136'
     ]])
 
     # PD IDs with tremor
@@ -184,8 +184,8 @@ class ParticipantIDs:
 
     # PD IDs with multiple raw files
     L_W_PARTS: List[str] = field(default_factory=lambda: ['hbv' + x for x in [
-        'hbv013', 'hbv018', 'hbv023', 'hbv038', 'hbv058',
-        'hbv063', 'hbv080'
+        '013', '018', '023', '038', '058',
+        '063', '080'
     ]])
 
     # PD IDs with sensor on left wrist in normal position
