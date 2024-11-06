@@ -446,7 +446,7 @@ def preprocess_video_annotations(df, code_label_map, d_tier_rename):
         else:
             df.loc[df['tier']==tier, 'label'] = df.loc[df['tier']==tier, 'code'].map(code_label_map[tier])
 
-    if 'start' in df.gc.columns:
+    if 'start' in df.columns:
         for moment in ['start', 'end']:
             df[moment+'_s'] = df[moment].copy()
 
