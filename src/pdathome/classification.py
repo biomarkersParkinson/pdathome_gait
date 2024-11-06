@@ -127,7 +127,7 @@ def cv_train_test_model(subject, df, classifier_name, l_predictors, l_predictors
     class_weight = None if step == 'gait' else 'balanced'
 
     # Split the data for training and testing
-    df_train = df[(df[gc.columns.ID] != subject) & (df[gc.columns.PRE_OR_POST]=='pre')].copy()
+    df_train = df[(df[gc.columns.ID] != subject)].copy()
     df_test = df[df[gc.columns.ID] == subject].copy()
     
     # Fit a scaler on the pd participants
