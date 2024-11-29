@@ -38,9 +38,13 @@ def train_test(
     config = config_class()
 
     # Define predictors
-    l_drop_cols = ['range_of_motion', 'forward_peak_velocity_mean', 'backward_peak_velocity_mean',
-                   'forward_peak_velocity_std', 'backward_peak_velocity_std']
-    l_predictors = [x for x in list(config.d_channels_values.keys()) if x not in l_drop_cols]
+    l_predictors = list(config.d_channels_values.keys())
+
+    if step == 'arm_activity':
+        l_drop_cols = ['range_of_motion', 'forward_peak_velocity_mean', 'backward_peak_velocity_mean',
+                       'forward_peak_velocity_std', 'backward_peak_velocity_std']
+        l_predictors = [x for x in list(config.d_channels_values.keys()) if x not in l_drop_cols]
+
     l_predictors_scale = [x for x in l_predictors if 'dominant' not in x]
 
     df_all_subjects = load_dataframes_directory(
@@ -240,37 +244,43 @@ def windows_to_timestamps(subject, df, path_output, pred_proba_colname, step):
             l_subj_cols += [gc.columns.NO_OTHER_ARM_ACTIVITY_MAJORITY_VOTING, gc.columns.ARM_LABEL_MAJORITY_VOTING]
 
     # Select relevant gc.columns
-    df = df[l_subj_cols]     
+    # df = df[l_subj_cols]     
 
-    df.to_pickle(os.path.join(path_output, f'{subject}_df.pkl'))
+    for side in [gc.descriptives.MOST_AFFECTED_SIDE, gc.descriptives.LEAST_AFFECTED_SIDE]:
+        df_side = df[df[gc.columns.SIDE] == side]
+        df_side = df_side.reset_index(drop=True)
+
+        df_side[pred_proba_colname].to_pickle(os.path.join(path_output, f'{subject}_{side}.pkl'))
+
+    # df.to_pickle(os.path.join(path_output, f'{subject}_df.pkl'))
     
-    # Load and combine timestamps data
-    df_ts_mas = pd.read_pickle(os.path.join(path_features, f'{subject}_{gc.descriptives.MOST_AFFECTED_SIDE}_ts.pkl')).assign(side=gc.descriptives.MOST_AFFECTED_SIDE)
-    df_ts_las = pd.read_pickle(os.path.join(path_features, f'{subject}_{gc.descriptives.LEAST_AFFECTED_SIDE}_ts.pkl')).assign(side=gc.descriptives.LEAST_AFFECTED_SIDE)
+    # # Load and combine timestamps data
+    # df_ts_mas = pd.read_pickle(os.path.join(path_features, f'{subject}_{gc.descriptives.MOST_AFFECTED_SIDE}_ts.pkl')).assign(side=gc.descriptives.MOST_AFFECTED_SIDE)
+    # df_ts_las = pd.read_pickle(os.path.join(path_features, f'{subject}_{gc.descriptives.LEAST_AFFECTED_SIDE}_ts.pkl')).assign(side=gc.descriptives.LEAST_AFFECTED_SIDE)
 
-    df_ts_mas = df_ts_mas.reset_index(drop=True)
-    df_ts_las = df_ts_las.reset_index(drop=True)
+    # df_ts_mas = df_ts_mas.reset_index(drop=True)
+    # df_ts_las = df_ts_las.reset_index(drop=True)
 
-    df_ts = pd.concat([df_ts_mas, df_ts_las], ignore_index=True)
+    # df_ts = pd.concat([df_ts_mas, df_ts_las], ignore_index=True)
 
-    # Explode timestamp data for merging
-    df_ts_exploded = df_ts.explode(l_explode_cols)
+    # # Explode timestamp data for merging
+    # df_ts_exploded = df_ts.explode(l_explode_cols)
 
-    # Merge the exploded data with windowed data
-    df_single_points = pd.merge(left=df_ts_exploded, right=df, how='left', on=l_merge_ts_cols)
+    # # Merge the exploded data with windowed data
+    # df_single_points = pd.merge(left=df_ts_exploded, right=df, how='left', on=l_merge_ts_cols)
         
-    # Reset index after merging
-    df_single_points.reset_index(drop=True, inplace=True)
+    # # Reset index after merging
+    # df_single_points.reset_index(drop=True, inplace=True)
 
-    # Group by relevant gc.columns and calculate mean prediction probability
-    df_pred_per_point = df_single_points.groupby(l_groupby_cols)[pred_proba_colname].mean().reset_index()
+    # # Group by relevant gc.columns and calculate mean prediction probability
+    # df_pred_per_point = df_single_points.groupby(l_groupby_cols)[pred_proba_colname].mean().reset_index()
 
-    # Save the final result
-    save_to_pickle(
-        df=df_pred_per_point,
-        path=path_output,
-        filename=f'{subject}.pkl'
-    )
+    # # Save the final result
+    # save_to_pickle(
+    #     df=df_pred_per_point,
+    #     path=path_output,
+    #     filename=f'{subject}.pkl'
+    # )
 
 
 def store_model_output(df, classifier_name, step, n_jobs=-1):

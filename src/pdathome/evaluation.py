@@ -9,6 +9,8 @@ import seaborn as sns
 from scipy.stats import wilcoxon, ranksums
 from sklearn.metrics import roc_curve, auc
 
+from paradigma.gait.gait_analysis_config import GaitFeatureExtractionConfig, ArmActivityFeatureExtractionConfig
+
 from pdathome.constants import global_constants as gc, mappings as mp
 from pdathome.preprocessing import add_segment_category
 from pdathome.quantification import compute_aggregations, compute_effect_size
@@ -239,7 +241,7 @@ def generate_results_classification(step, subject, segment_gap_s):
             boolean_colname = 'no_other_arm_activity'
             value_label = 'Gait without other behaviours or other positions'
 
-            arm_label_metric = 'spec'
+            arm_label_metric = 'sens'
 
         with open(os.path.join(gc.paths.PATH_THRESHOLDS, step, f'{model}.txt'), 'r') as f:
             clf_threshold = float(f.read())
@@ -260,9 +262,6 @@ def generate_results_classification(step, subject, segment_gap_s):
             if step == 'gait' and subject in gc.participant_ids.L_TREMOR_IDS:
                 l_raw_cols.append(gc.columns.TREMOR_LABEL)
         
-        # Predictions
-        df_predictions = pd.read_pickle(os.path.join(path_predictions, model, f'{subject}.pkl'))
-        
         # Load raw data
         l_dfs = []
 
@@ -270,8 +269,10 @@ def generate_results_classification(step, subject, segment_gap_s):
         if step == 'gait':
             activity_colname = gc.columns.FREE_LIVING_LABEL
             activity_value = 'Walking'
+            config = GaitFeatureExtractionConfig()
 
         elif step == 'arm_activity':
+            config = ArmActivityFeatureExtractionConfig()
             if subject in gc.participant_ids.L_PD_IDS:
                 activity_colname = gc.columns.ARM_LABEL
                 activity_value = 'Gait without other behaviours or other positions' # TEMPORARILY TRY WITH ARM ACTIVITY INSTEAD OF GAIT
@@ -285,17 +286,44 @@ def generate_results_classification(step, subject, segment_gap_s):
             df_raw = pd.read_pickle(os.path.join(gc.paths.PATH_PREPARED_DATA, f'{subject}_{side}.pkl')).assign(side=side)
 
             df_raw = add_segment_category(
-                    df=df_raw, activity_colname=activity_colname,
-                    time_colname=gc.columns.TIME, segment_nr_colname=gc.columns.TRUE_SEGMENT_NR,
-                    segment_cat_colname=gc.columns.TRUE_SEGMENT_CAT, segment_gap_s=segment_gap_s, 
+                    config=config, df=df_raw, activity_colname=activity_colname,
+                    segment_nr_colname=gc.columns.TRUE_SEGMENT_NR,
+                    segment_cat_colname=gc.columns.TRUE_SEGMENT_CAT, 
                     activity_value=activity_value)
 
             l_dfs.append(df_raw)
 
         df_raw = pd.concat(l_dfs, axis=0)
 
+        # Predictions
+        df_predictions = pd.read_pickle(os.path.join(path_predictions, model, f'{subject}_{side}.pkl'))
+
+        # load gait features
+        df_features = pd.read_pickle(os.path.join(gc.paths.PATH_GAIT_FEATURES, f'{subject}_{side}.pkl'))
+
+        # Determine gait prediction per timestamp
+        l_cols_features = ['time']
+        df_predictions = pd.concat([df_features[l_cols_features], df_predictions], axis=1)
+
+        # Step 1: Expand each window into individual timestamps
+        expanded_data = []
+        for _, row in df_predictions.iterrows():
+            start_time = row[gc.columns.TIME]
+            proba = row[pred_proba_colname]
+            timestamps = np.arange(start_time, start_time + config.window_length_s, 1/gc.parameters.DOWNSAMPLED_FREQUENCY)
+            expanded_data.extend(zip(timestamps, [proba] * len(timestamps)))
+
+        # Create a new DataFrame with expanded timestamps
+        expanded_df = pd.DataFrame(expanded_data, columns=[gc.columns.TIME, pred_proba_colname])
+
+        # Step 2: Round timestamps to avoid floating-point inaccuracies
+        expanded_df[gc.columns.TIME] = expanded_df[gc.columns.TIME].round(2)
+
+        # Step 3: Aggregate by unique timestamps and calculate the mean probability
+        expanded_df = expanded_df.groupby(gc.columns.TIME, as_index=False)[pred_proba_colname].mean()
+
         # Merge labels
-        df = pd.merge(left=df_predictions, right=df_raw[l_raw_cols], how='left', on=[gc.columns.TIME, gc.columns.SIDE])
+        df = pd.merge(left=df_predictions, right=df_raw[l_raw_cols], how='left', on=gc.columns.TIME)
 
         # Use classification threshold to set predictions
         df.loc[df[pred_proba_colname] >= clf_threshold, pred_colname] = 1

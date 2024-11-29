@@ -8,16 +8,27 @@ from collections import Counter
 from scipy.interpolate import CubicSpline
 
 from paradigma.gait.feature_extraction import extract_temporal_domain_features, extract_spectral_domain_features, \
-    pca_transform_gyroscope, compute_angle, remove_moving_average_angle, signal_to_ffts, get_dominant_frequency, \
-    compute_perc_power, extract_angle_extremes, extract_range_of_motion, extract_peak_angular_velocity
+    pca_transform_gyroscope, compute_angle, remove_moving_average_angle, extract_angle_features
 from paradigma.gait.gait_analysis_config import GaitFeatureExtractionConfig, ArmActivityFeatureExtractionConfig
 from paradigma.imu_preprocessing import butterworth_filter
 from paradigma.preprocessing_config import IMUPreprocessingConfig
-from paradigma.windowing import tabulate_windows, create_segments, discard_segments, categorize_segments
+from paradigma.segmenting import tabulate_windows, create_segments, discard_segments, categorize_segments
 
 from pdathome.constants import global_constants as gc, mappings as mp
 from pdathome.load import load_stage_start_end, load_sensor_data, load_video_annotations
 from pdathome.utils import save_to_pickle
+
+def compute_mode(data):
+    """Computes the mode for 1D data using np.unique."""
+    values, counts = np.unique(data, return_counts=True)
+    max_count_index = np.argmax(counts)
+    return values[max_count_index], counts[max_count_index]
+
+def is_majority(data, target="Walking"):
+    """Checks if 'target' occurs more than half the time in 1D data."""
+    values, counts = np.unique(data, return_counts=True)
+    target_count = counts[values == target].sum() if target in values else 0
+    return target_count > (len(data) / 2)
 
 
 def prepare_data(subject):
@@ -102,307 +113,327 @@ def preprocess_gait_detection(subject):
     for side in [gc.descriptives.MOST_AFFECTED_SIDE, gc.descriptives.LEAST_AFFECTED_SIDE]:
         df = pd.read_pickle(os.path.join(gc.paths.PATH_PREPARED_DATA, f'{subject}_{side}.pkl'))
 
-        config = IMUPreprocessingConfig()
-        config.acceleration_units = 'g'
+        imu_config = IMUPreprocessingConfig()
+        gait_config = GaitFeatureExtractionConfig()
+        imu_config.acceleration_units = 'g'
 
         # Extract relevant gc.columns for accelerometer data
-        accel_cols = list(config.d_channels_accelerometer.keys())
+        accel_cols = imu_config.l_accelerometer_cols
 
         # Change to correct units [g]
-        df[accel_cols] = df[accel_cols] / 9.81 if config.acceleration_units == 'm/s^2' else df[accel_cols]
+        df[accel_cols] = df[accel_cols] / 9.81 if imu_config.acceleration_units == 'm/s^2' else df[accel_cols]
 
-        # Define filtering passbands
-        passbands = ['hp', 'lp'] 
+        # Extract accelerometer data
+        accel_data = df[imu_config.l_accelerometer_cols].values
 
-        # Apply Butterworth filter for each passband
-        for col in accel_cols:
-            for result, passband in zip(['filt', 'grav'], passbands):
-                df[f'{result}_{col}'] = butterworth_filter(
-                    single_sensor_col=np.array(df[col]),
-                    order=config.filter_order,
-                    cutoff_frequency=config.lower_cutoff_frequency,
-                    passband=passband,
-                    sampling_frequency=gc.parameters.DOWNSAMPLED_FREQUENCY
-                )
+        filter_configs = {
+            "hp": {"result_columns": imu_config.l_accelerometer_cols, "replace_original": True},
+            "lp": {"result_columns": [f'{col}_grav' for col in imu_config.l_accelerometer_cols], "replace_original": False},
+        }
 
-        # Drop original accelerometer gc.columns and append filtered results
-        df = df.drop(columns=accel_cols).rename(columns={f'filt_{col}': col for col in accel_cols})
+        # Apply filters in a loop
+        for passband, filter_config in filter_configs.items():
+            filtered_data = butterworth_filter(
+                data=accel_data,
+                order=imu_config.filter_order,
+                cutoff_frequency=imu_config.lower_cutoff_frequency,
+                passband=passband,
+                sampling_frequency=imu_config.sampling_frequency,
+            )
 
-        config = GaitFeatureExtractionConfig()
+            # Replace or add new columns based on configuration
+            df[filter_config["result_columns"]] = filtered_data
 
-        config.list_value_cols += [gc.columns.TIME, gc.columns.FREE_LIVING_LABEL]
-        l_ts_cols = [gc.columns.TIME, gc.columns.WINDOW_NR]
-        l_export_cols = [gc.columns.TIME, gc.columns.WINDOW_NR, gc.columns.ACTIVITY_LABEL_MAJORITY_VOTING, gc.columns.GAIT_MAJORITY_VOTING] + list(config.d_channels_values.keys())
-        config.single_value_cols = None
-        if subject in gc.participant_ids.L_PD_IDS:
-            config.list_value_cols.append(gc.columns.ARM_LABEL)
-            l_ts_cols += [gc.columns.PRE_OR_POST]
-            l_export_cols += [gc.columns.PRE_OR_POST, gc.columns.ARM_LABEL_MAJORITY_VOTING]
-            config.single_value_cols = [gc.columns.PRE_OR_POST]
+        windowed_data = []
 
-
-        df_windowed = tabulate_windows(
-            config=config,
-            df=df,
-            agg_func='first',
-        )
+        l_windowed_cols = [
+            gc.columns.TIME, gc.columns.FREE_LIVING_LABEL
+            ] + gait_config.l_accelerometer_cols + gait_config.l_gravity_cols
         
-        # store windows with timestamps for later use
-        df_windowed[l_ts_cols].to_pickle(os.path.join(gc.paths.PATH_GAIT_FEATURES, f'{subject}_{side}_ts.pkl'))
+        if subject in gc.participant_ids.L_PD_IDS:
+            l_windowed_cols += [gc.columns.ARM_LABEL]
 
-        # Determine most prevalent activity
-        df_windowed[gc.columns.ACTIVITY_LABEL_MAJORITY_VOTING] = df_windowed[gc.columns.FREE_LIVING_LABEL].apply(lambda x: pd.Series(x).mode()[0])
+            df_grouped = df.groupby(gc.columns.PRE_OR_POST, sort=False)
+            order = ['pre', 'post']
 
-        # Determine if the majority of the window is walking
-        df_windowed[gc.columns.GAIT_MAJORITY_VOTING] = df_windowed[gc.columns.FREE_LIVING_LABEL].apply(lambda x: x.count('Walking') >= len(x)/2)
+            for label in order:
+                if label in df_grouped.groups:  # Ensure the label exists in the groups
+                    group = df_grouped.get_group(label)
+                    windows = tabulate_windows(
+                        config=gait_config,
+                        df=group,
+                        columns=l_windowed_cols
+                    )
+                    if len(windows) > 0:  # Skip if no windows are created
+                        windowed_data.append(windows)
+
+        else:
+            windows = tabulate_windows(
+                config=gait_config,
+                df=df,
+                columns=l_windowed_cols
+            )
+            if len(windows) > 0:  # Skip if no windows are created
+                windowed_data.append(windows)
+
+        if len(windowed_data) > 0:
+            windowed_data = np.concatenate(windowed_data, axis=0)
+        else:
+            raise ValueError("No windows were created from the given data.")
+
+        df_features = pd.DataFrame()
+
+        df_features[gc.columns.TIME] = sorted(windowed_data[:, 0, l_windowed_cols.index(gc.columns.TIME)])
 
         if subject in gc.participant_ids.L_PD_IDS:
-            df_windowed[gc.columns.ARM_LABEL_MAJORITY_VOTING] = df_windowed[gc.columns.ARM_LABEL].apply(lambda x: arm_label_majority_voting(config, x))
+            df_features = pd.merge(left=df_features, right=df[[gc.columns.TIME, gc.columns.PRE_OR_POST]], how='left', on=gc.columns.TIME) 
 
-        df_windowed = df_windowed.drop(columns=[x for x in l_ts_cols if x not in [gc.columns.WINDOW_NR, gc.columns.PRE_OR_POST]])
+        # Calulate the mode of the labels
+        windowed_labels = windowed_data[:, :, l_windowed_cols.index(gc.columns.FREE_LIVING_LABEL)]
+        modes_and_counts = np.apply_along_axis(lambda x: compute_mode(x), axis=1, arr=windowed_labels)
+        modes, counts = zip(*modes_and_counts)
+
+        df_features[gc.columns.ACTIVITY_LABEL_MAJORITY_VOTING] = modes
+        df_features[gc.columns.GAIT_MAJORITY_VOTING] = [is_majority(window) for window in windowed_labels]
+
+        if subject in gc.participant_ids.L_PD_IDS:
+            windowed_labels = windowed_data[:, :, l_windowed_cols.index(gc.columns.ARM_LABEL)]
+            modes_and_counts = np.apply_along_axis(lambda x: compute_mode(x), axis=1, arr=windowed_labels)
+            modes, counts = zip(*modes_and_counts)
+
+            df_features[gc.columns.ARM_LABEL_MAJORITY_VOTING] = modes
+            df_features[gc.columns.NO_OTHER_ARM_ACTIVITY_MAJORITY_VOTING] = [is_majority(window, target="Gait without other behaviours or other positions") for window in windowed_labels]
 
         # compute statistics of the temporal domain signals
-        df_windowed = extract_temporal_domain_features(
-            config=config,
-            df_windowed=df_windowed,
-            l_gravity_stats=['mean', 'std']
+        accel_indices = [l_windowed_cols.index(x) for x in gait_config.l_accelerometer_cols]
+        grav_indices = [l_windowed_cols.index(x) for x in gait_config.l_gravity_cols]
+
+        accel_windowed = np.asarray(windowed_data[:, :, np.min(accel_indices):np.max(accel_indices) + 1], dtype=float)
+        grav_windowed = np.asarray(windowed_data[:, :, np.min(grav_indices):np.max(grav_indices) + 1], dtype=float)
+
+        df_temporal_features = extract_temporal_domain_features(
+            config=gait_config,
+            windowed_acc=accel_windowed,
+            windowed_grav=grav_windowed,
+            l_grav_stats=['mean', 'std']
         )
+
+        df_features = pd.concat([df_features, df_temporal_features], axis=1)
 
         # transform the signals from the temporal domain to the spectral domain using the fast fourier transform
         # and extract spectral features
-        df_windowed = extract_spectral_domain_features(
-            config=config,
-            df_windowed=df_windowed,
-            sensor=config.sensor,
-            l_sensor_colnames=config.l_accelerometer_cols
+        df_spectral_features = extract_spectral_domain_features(
+            config=gait_config,
+            sensor=gait_config.sensor,
+            windowed_data=accel_windowed,
         )
 
-        save_to_pickle(
-            df=df_windowed[l_export_cols],
-            path=gc.paths.PATH_GAIT_FEATURES,
-            filename=f'{subject}_{side}.pkl'
-        )
+        df_features = pd.concat([df_features, df_spectral_features], axis=1)
+        
+        file_path = os.path.join(gc.paths.PATH_GAIT_FEATURES, f'{subject}_{side}.pkl')
+        df_features.to_pickle(file_path)
 
     print(f"Time {datetime.datetime.now()} - {subject} - Finished preprocessing gait detection.")
 
 
 def preprocess_filtering_gait(subject):
     print(f"Time {datetime.datetime.now()} - {subject} - Starting preprocessing filtering gait ...")
-    df_pred = pd.read_pickle(os.path.join(gc.paths.PATH_GAIT_PREDICTIONS, gc.classifiers.GAIT_DETECTION_CLASSIFIER_SELECTED, f'{subject}.pkl'))
     for side in [gc.descriptives.MOST_AFFECTED_SIDE, gc.descriptives.LEAST_AFFECTED_SIDE]:
 
+        # load timestamps
+        df_ts = pd.read_pickle(os.path.join(gc.paths.PATH_PREPARED_DATA, f'{subject}_{side}.pkl'))
+        df_ts['time'] = df_ts['time'].round(2)
+
+        # load gait features
+        df_features = pd.read_pickle(os.path.join(gc.paths.PATH_GAIT_FEATURES, f'{subject}_{side}.pkl'))
+
+        # Load gait predictions
+        df_pred = pd.read_pickle(os.path.join(gc.paths.PATH_GAIT_PREDICTIONS, gc.classifiers.GAIT_DETECTION_CLASSIFIER_SELECTED, f'{subject}_{side}.pkl'))
+
+        # Load classification threshold
         with open(os.path.join(gc.paths.PATH_THRESHOLDS, 'gait', f'{gc.classifiers.GAIT_DETECTION_CLASSIFIER_SELECTED}.txt'), 'r') as f:
             threshold = float(f.read())
 
-        # Configure gc.columns based on cohort
-        l_cols_to_export = [gc.columns.TIME, gc.columns.WINDOW_NR]
-
-        # Load sensor data
-        df_sensors = pd.read_pickle(os.path.join(gc.paths.PATH_PREPARED_DATA, f'{subject}_{side}.pkl'))
-        df_pred_side = df_pred.loc[df_pred[gc.columns.SIDE]==side].copy()
-
+        # Determine gait prediction per timestamp
+        l_cols_features = ['time']
+        df_predictions = pd.concat([df_features[l_cols_features], df_pred], axis=1)
+        
         imu_config = IMUPreprocessingConfig()
+        gait_config = GaitFeatureExtractionConfig()
         arm_activity_config = ArmActivityFeatureExtractionConfig()
+
+        # Step 1: Expand each window into individual timestamps
+        expanded_data = []
+        for _, row in df_predictions.iterrows():
+            start_time = row['time']
+            proba = row['pred_gait_proba']
+            timestamps = np.arange(start_time, start_time + gait_config.window_length_s, 1/gc.parameters.DOWNSAMPLED_FREQUENCY)
+            expanded_data.extend(zip(timestamps, [proba] * len(timestamps)))
+
+        # Create a new DataFrame with expanded timestamps
+        expanded_df = pd.DataFrame(expanded_data, columns=['time', 'pred_gait_proba'])
+
+        # Step 2: Round timestamps to avoid floating-point inaccuracies
+        expanded_df['time'] = expanded_df['time'].round(2)
+
+        # Step 3: Aggregate by unique timestamps and calculate the mean probability
+        expanded_df = expanded_df.groupby('time', as_index=False)['pred_gait_proba'].mean()
+
+        df_ts = pd.merge(left=df_ts, right=expanded_df, how='left', on='time')
 
         imu_config.acceleration_units = 'g'
         arm_activity_config.list_value_cols += [gc.columns.TIME, gc.columns.FREE_LIVING_LABEL]
 
         # Extract relevant gc.columns for accelerometer data
-        accel_cols = list(imu_config.d_channels_accelerometer.keys())
+        accel_cols = imu_config.l_accelerometer_cols
 
         # Change to correct units [g]
-        df_sensors[accel_cols] = df_sensors[accel_cols] / 9.81 if imu_config.acceleration_units == 'm/s^2' else df_sensors[accel_cols]
+        df_ts[accel_cols] = df_ts[accel_cols] / 9.81 if imu_config.acceleration_units == 'm/s^2' else df_ts[accel_cols]
 
-        # Apply Butterworth filter for each passband
-        for col in accel_cols:
-            for result, passband in zip(['filt', 'grav'], ['hp', 'lp']):
-                df_sensors[f'{result}_{col}'] = butterworth_filter(
-                    single_sensor_col=np.array(df_sensors[col]),
-                    order=imu_config.filter_order,
-                    cutoff_frequency=imu_config.lower_cutoff_frequency,
-                    passband=passband,
-                    sampling_frequency=imu_config.sampling_frequency
-                )
+        # Extract accelerometer data
+        accel_data = df_ts[imu_config.l_accelerometer_cols].values
 
-        # Drop original accelerometer gc.columns
-        df_sensors = df_sensors.drop(columns=accel_cols).rename(columns={f'filt_{col}': col for col in accel_cols})
+        filter_configs = {
+            "hp": {"result_columns": imu_config.l_accelerometer_cols, "replace_original": True},
+            "lp": {"result_columns": [f'{col}_grav' for col in imu_config.l_accelerometer_cols], "replace_original": False},
+        }
 
-        # Merge sensor data with predictions
-        l_merge_cols = [gc.columns.TIME]
+        # Apply filters in a loop
+        for passband, filter_config in filter_configs.items():
+            filtered_data = butterworth_filter(
+                data=accel_data,
+                order=imu_config.filter_order,
+                cutoff_frequency=imu_config.lower_cutoff_frequency,
+                passband=passband,
+                sampling_frequency=imu_config.sampling_frequency,
+            )
 
-        df = pd.merge(left=df_pred_side, right=df_sensors, how='left', on=l_merge_cols).reset_index(drop=True)
+            # Replace or add new columns based on configuration
+            df_ts[filter_config["result_columns"]] = filtered_data
 
         # Process free living label and remove nans
-        df['gait_boolean'] = (df[gc.columns.FREE_LIVING_LABEL] == 'Walking').astype(int)
-        df = df.dropna(subset=gc.columns.L_GYROSCOPE)
+        df_ts = df_ts.dropna(subset=gc.columns.L_GYROSCOPE)
             
         # Apply threshold and filter data
-        df[gc.columns.PRED_GAIT] = (df[gc.columns.PRED_GAIT_PROBA] >= threshold).astype(int)
+        df_ts[gc.columns.PRED_GAIT] = (df_ts[gc.columns.PRED_GAIT_PROBA] >= threshold).astype(int)
 
         # Perform principal component analysis on the gyroscope signals to obtain the angular velocity in the
         # direction of the swing of the arm 
-        df[gc.columns.VELOCITY] = pca_transform_gyroscope(
-            df=df,
-            y_gyro_colname=gc.columns.GYROSCOPE_Y,
-            z_gyro_colname=gc.columns.GYROSCOPE_Z,
-            pred_gait_colname=gc.columns.PRED_GAIT
+        df_ts[gc.columns.VELOCITY] = pca_transform_gyroscope(
+            config=arm_activity_config,
+            df=df_ts,
         )
 
         # Integrate the angular velocity to obtain an estimation of the angle
-        df[gc.columns.ANGLE] = compute_angle(
-            velocity_col=df[gc.columns.VELOCITY],
-            time_col=df[gc.columns.TIME]
+        df_ts[gc.columns.ANGLE] = compute_angle(
+            config=arm_activity_config,
+            df=df_ts,
         )
 
         # Remove the moving average from the angle to account for possible drift caused by the integration
         # of noise in the angular velocity
-        df[gc.columns.ANGLE] = remove_moving_average_angle(
-            angle_col=df[gc.columns.ANGLE],
-            sampling_frequency=arm_activity_config.sampling_frequency
+        df_ts[gc.columns.ANGLE] = remove_moving_average_angle(
+            config=arm_activity_config,
+            df=df_ts,
         )
         
         # Filter unobserved data
         if subject in gc.participant_ids.L_PD_IDS:
-            df = df[df[gc.columns.ARM_LABEL] != 'Cannot assess']
+            df_ts = df_ts[df_ts[gc.columns.ARM_LABEL] != 'Cannot assess']
         
         # Use only predicted gait for the subsequent steps
-        df = df[df[gc.columns.PRED_GAIT] == 1].reset_index(drop=True)
+        df_ts = df_ts[df_ts[gc.columns.PRED_GAIT] == 1].reset_index(drop=True)
 
         # Group consecutive timestamps into segments with new segments starting after a pre-specified gap
-        df[gc.columns.PRED_SEGMENT_NR] = create_segments(
-            df=df,
-            time_column_name=gc.columns.TIME,
-            gap_threshold_s=gc.parameters.SEGMENT_GAP_GAIT
+        df_ts[gc.columns.SEGMENT_NR] = create_segments(
+            config=arm_activity_config,
+            df=df_ts
         )
 
         # Remove any segments that do not adhere to predetermined criteria
-        df = discard_segments(
-            df=df,
-            segment_nr_colname=gc.columns.PRED_SEGMENT_NR,
-            min_length_segment_s=arm_activity_config.window_length_s,
-            sampling_frequency=arm_activity_config.sampling_frequency
+        df_ts = discard_segments(
+            config=arm_activity_config,
+            df=df_ts
         )
 
         # Create windows of fixed length and step size from the time series
-        arm_activity_config.single_value_cols = [gc.columns.PRED_SEGMENT_NR]
-        if subject in gc.participant_ids.L_PD_IDS:
-            arm_activity_config.single_value_cols.append(gc.columns.PRE_OR_POST)
-            arm_activity_config.list_value_cols.append(gc.columns.ARM_LABEL)
+        windowed_data = []
 
-        l_dfs = [
-            tabulate_windows(
-                config=arm_activity_config,
-                df=df[df[gc.columns.PRED_SEGMENT_NR] == segment_nr].reset_index(drop=True),
-            )
-            for segment_nr in df[gc.columns.PRED_SEGMENT_NR].unique()
-        ]
-        l_dfs = [df for df in l_dfs if not df.empty]
-
-        df_windowed = pd.concat(l_dfs).reset_index(drop=True)
-
-        # Update window numbers to be unique across segments
-        max_window_nr = 0
-        for segment_nr in sorted(df[gc.columns.PRED_SEGMENT_NR].unique()):  
-            segment_mask = df_windowed[gc.columns.PRED_SEGMENT_NR] == segment_nr
-            df_windowed.loc[segment_mask, gc.columns.WINDOW_NR] += max_window_nr
-            max_window_nr = df_windowed.loc[segment_mask, gc.columns.WINDOW_NR].max()
-
-        # Save windows with timestamps for later use
-        df_windowed[l_cols_to_export].to_pickle(os.path.join(gc.paths.PATH_ARM_ACTIVITY_FEATURES, f'{subject}_{side}_ts.pkl'))
-
-        df_windowed = df_windowed.drop(columns=[gc.columns.TIME])
-
-        # Majority voting for labels per window
-        if subject in gc.participant_ids.L_PD_IDS:
-            df_windowed[gc.columns.NO_OTHER_ARM_ACTIVITY_MAJORITY_VOTING] = df_windowed[gc.columns.ARM_LABEL].apply(lambda x: x.count('Gait without other behaviours or other positions') >= len(x)/2)
-            df_windowed[gc.columns.ARM_LABEL_MAJORITY_VOTING] = df_windowed[gc.columns.ARM_LABEL].apply(lambda x: arm_label_majority_voting(arm_activity_config, x))
-            df_windowed = df_windowed.drop(columns=[gc.columns.ARM_LABEL])
-
-        # Transform the angle from the temporal domain to the spectral domain using the fast fourier transform
-        df_windowed[f'{gc.columns.ANGLE}_freqs'], df_windowed[f'{gc.columns.ANGLE}_fft'] = signal_to_ffts(
-            sensor_col=df_windowed[gc.columns.ANGLE],
-            window_type=arm_activity_config.window_type,
-            sampling_frequency=arm_activity_config.sampling_frequency
-        )
-
-        # Obtain the dominant frequency of the angle signal in the frequency band of interest
-        # defined by the highest peak in the power spectrum
-        df_windowed[f'{gc.columns.ANGLE}_dominant_frequency'] = df_windowed.apply(
-            lambda x: get_dominant_frequency(
-                signal_ffts=x[f'{gc.columns.ANGLE}_fft'],
-                signal_freqs=x[f'{gc.columns.ANGLE}_freqs'],
-                fmin=arm_activity_config.power_band_low_frequency,
-                fmax=arm_activity_config.power_band_high_frequency
-                ),
-                axis=1
-        )
-
-        df_windowed = df_windowed.drop(columns=[f'{gc.columns.ANGLE}_fft', f'{gc.columns.ANGLE}_freqs'])
-
-        # Compute the percentage of power in the frequency band of interest (i.e., the frequency band of the arm swing)
-        df_windowed[f'{gc.columns.ANGLE}_perc_power'] = df_windowed[gc.columns.ANGLE].apply(
-            lambda x: compute_perc_power(
-                sensor_col=x,
-                fmin_band=arm_activity_config.power_band_low_frequency,
-                fmax_band=arm_activity_config.power_band_high_frequency,
-                fmin_total=arm_activity_config.spectrum_low_frequency,
-                fmax_total=arm_activity_config.spectrum_high_frequency,
-                sampling_frequency=arm_activity_config.sampling_frequency,
-                window_type=arm_activity_config.window_type
-            )
-        )
-
-        # Determine the extrema (minima and maxima) of the angle signal
-        extract_angle_extremes(
-                df=df_windowed,
-                angle_colname=gc.columns.ANGLE,
-                dominant_frequency_colname=f'{gc.columns.ANGLE}_dominant_frequency',
-                sampling_frequency=arm_activity_config.sampling_frequency
-            )
-                
-
-        # Calculate the change in angle between consecutive extrema (minima and maxima) of the angle signal inside the window
-        df_windowed[f'{gc.columns.ANGLE}_amplitudes'] = extract_range_of_motion(angle_extrema_values_col=df_windowed[f'{gc.columns.ANGLE}_extrema_values'])
-
-        # Aggregate the changes in angle between consecutive extrema to obtain the range of motion
-        df_windowed['range_of_motion'] = df_windowed[f'{gc.columns.ANGLE}_amplitudes'].apply(lambda x: np.mean(x) if len(x) > 0 else 0).replace(np.nan, 0)
-        df_windowed = df_windowed.drop(columns=[f'{gc.columns.ANGLE}_amplitudes'])
-
-        # Compute the forward and backward peak angular velocity using the extrema of the angular velocity
-        extract_peak_angular_velocity(
-            df=df_windowed,
-            velocity_colname=gc.columns.VELOCITY,
-            angle_minima_colname=f'{gc.columns.ANGLE}_minima',
-            angle_maxima_colname=f'{gc.columns.ANGLE}_maxima'
-        )
-
-        # Compute aggregated measures of the peak angular velocity
-        for dir in ['forward', 'backward']:
-            df_windowed[f'{dir}_peak_{gc.columns.VELOCITY}_mean'] = df_windowed[f'{dir}_peak_{gc.columns.VELOCITY}'].apply(lambda x: np.mean(x) if len(x) > 0 else 0)
-            df_windowed[f'{dir}_peak_{gc.columns.VELOCITY}_std'] = df_windowed[f'{dir}_peak_{gc.columns.VELOCITY}'].apply(lambda x: np.std(x) if len(x) > 0 else 0)
-            df_windowed = df_windowed.drop(columns=[f'{dir}_peak_{gc.columns.VELOCITY}'])
-
-        # Compute statistics of the temporal domain accelerometer signals
-        df_windowed = extract_temporal_domain_features(arm_activity_config, df_windowed, l_gravity_stats=['mean', 'std'])
-
-        # Transform the accelerometer and gyroscope signals from the temporal domain to the spectral domain
-        # using the fast fourier transform and extract spectral features
-        for sensor, l_sensor_colnames in zip(['accelerometer', 'gyroscope'], [gc.columns.L_ACCELEROMETER, gc.columns.L_GYROSCOPE]):
-            df_windowed = extract_spectral_domain_features(arm_activity_config, df_windowed, sensor, l_sensor_colnames)
+        l_windowed_cols = [
+            gc.columns.TIME, gc.columns.FREE_LIVING_LABEL, gc.columns.ANGLE, gc.columns.VELOCITY
+            ] + arm_activity_config.l_accelerometer_cols + arm_activity_config.l_gravity_cols + arm_activity_config.l_gyroscope_cols
         
-        df_windowed.fillna(0, inplace=True)
-        df_windowed[gc.columns.SIDE] = side
+        if subject in gc.participant_ids.L_PD_IDS:
+            l_windowed_cols += [gc.columns.ARM_LABEL]
 
-        l_export_cols = [gc.columns.TIME, gc.columns.WINDOW_NR] + list(arm_activity_config.d_channels_values.keys())
+        df_grouped = df_ts.groupby(gc.columns.SEGMENT_NR, sort=False)
+
+        for _, group in df_grouped:
+            windows = tabulate_windows(
+                config=arm_activity_config,
+                df=group,
+                columns=l_windowed_cols
+            )
+            if len(windows) > 0:  # Skip if no windows are created
+                windowed_data.append(windows)
+
+        if len(windowed_data) > 0:
+            windowed_data = np.concatenate(windowed_data, axis=0)
+        else:
+            raise ValueError("No windows were created from the given data.")
+
+        df_features = pd.DataFrame()
+
+        df_features[gc.columns.TIME] = sorted(windowed_data[:, 0, l_windowed_cols.index(gc.columns.TIME)])
 
         if subject in gc.participant_ids.L_PD_IDS:
-            l_export_cols += [gc.columns.PRE_OR_POST, gc.columns.ARM_LABEL_MAJORITY_VOTING, gc.columns.NO_OTHER_ARM_ACTIVITY_MAJORITY_VOTING]
+            df_features = pd.merge(left=df_features, right=df_ts[[gc.columns.TIME, gc.columns.PRE_OR_POST]], how='left', on=gc.columns.TIME) 
 
-        save_to_pickle(
-            df=df_windowed[l_export_cols],
-            path=gc.paths.PATH_ARM_ACTIVITY_FEATURES,
-            filename=f'{subject}_{side}.pkl'
-        )
+        # Calulate the mode of the labels
+        windowed_labels = windowed_data[:, :, l_windowed_cols.index(gc.columns.FREE_LIVING_LABEL)]
+        modes_and_counts = np.apply_along_axis(lambda x: compute_mode(x), axis=1, arr=windowed_labels)
+        modes, counts = zip(*modes_and_counts)
+
+        df_features[gc.columns.ACTIVITY_LABEL_MAJORITY_VOTING] = modes
+        df_features[gc.columns.GAIT_MAJORITY_VOTING] = [is_majority(window) for window in windowed_labels]
+
+        if subject in gc.participant_ids.L_PD_IDS:
+            windowed_labels = windowed_data[:, :, l_windowed_cols.index(gc.columns.ARM_LABEL)]
+            modes_and_counts = np.apply_along_axis(lambda x: compute_mode(x), axis=1, arr=windowed_labels)
+            modes, counts = zip(*modes_and_counts)
+
+            df_features[gc.columns.ARM_LABEL_MAJORITY_VOTING] = modes
+            df_features[gc.columns.NO_OTHER_ARM_ACTIVITY_MAJORITY_VOTING] = [is_majority(window, target="Gait without other behaviours or other positions") for window in windowed_labels]
+
+        # compute statistics of the temporal domain signals
+        accel_indices = [l_windowed_cols.index(x) for x in gait_config.l_accelerometer_cols]
+        grav_indices = [l_windowed_cols.index(x) for x in gait_config.l_gravity_cols]
+        gyro_indices = [l_windowed_cols.index(x) for x in gait_config.l_gyroscope_cols]
+        idx_angle = l_windowed_cols.index(gc.columns.ANGLE)
+        idx_velocity = l_windowed_cols.index(gc.columns.VELOCITY)
+
+        accel_windowed = np.asarray(windowed_data[:, :, np.min(accel_indices):np.max(accel_indices) + 1], dtype=float)
+        grav_windowed = np.asarray(windowed_data[:, :, np.min(grav_indices):np.max(grav_indices) + 1], dtype=float)
+        gyro_windowed = np.asarray(windowed_data[:, :, np.min(gyro_indices):np.max(gyro_indices) + 1], dtype=float)
+        angle_windowed = np.asarray(windowed_data[:, :, idx_angle], dtype=float)
+        velocity_windowed = np.asarray(windowed_data[:, :, idx_velocity], dtype=float)
+
+        # angle features
+        df_features_angle = extract_angle_features(arm_activity_config, angle_windowed, velocity_windowed)
+        df_features = pd.concat([df_features, df_features_angle], axis=1)
+
+        # compute statistics of the temporal domain accelerometer signals
+        df_temporal_features = extract_temporal_domain_features(arm_activity_config, accel_windowed, grav_windowed, l_grav_stats=['mean', 'std'])
+        df_features = pd.concat([df_features, df_temporal_features], axis=1)
+
+        # transform the accelerometer and gyroscope signals from the temporal domain to the spectral domain
+        # using the fast fourier transform and extract spectral features
+        for sensor_name, windowed_sensor in zip(['accelerometer', 'gyroscope'], [accel_windowed, gyro_windowed]):
+            df_spectral_features = extract_spectral_domain_features(arm_activity_config, sensor_name, windowed_sensor)
+            df_features = pd.concat([df_features, df_spectral_features], axis=1)
+
+        file_path = os.path.join(gc.paths.PATH_ARM_ACTIVITY_FEATURES, f'{subject}_{side}.pkl')
+        df_features.to_pickle(file_path)
 
     print(f"Time {datetime.datetime.now()} - {subject} - Finished preprocessing filtering gait.")
 
@@ -554,13 +585,12 @@ def arm_label_majority_voting(config, arm_label):
     return np.nan
 
 
-def add_segment_category(df, activity_colname, time_colname, segment_nr_colname,
-                         segment_cat_colname, segment_gap_s, activity_value):
+def add_segment_category(config, df, activity_colname, segment_nr_colname,
+                         segment_cat_colname, activity_value):
     # Create segments based on video-annotations of gait
     segments = create_segments(
-        df=df.loc[df[activity_colname] == activity_value],
-        time_column_name=time_colname,
-        gap_threshold_s=segment_gap_s
+        config=config,
+        df=df
     )
 
     # Assign segment numbers to the raw data

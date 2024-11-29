@@ -281,12 +281,12 @@ metric_map = {
 }
 
 arm_swing_parameter_map = {
-    'range_of_motion_median': 'Median range of motion [deg]',
-    'median_rom': 'Median range of motion [deg]',
-    'range_of_motion_quantile_95': '95th percentile range of motion [deg]',
-    '95p_rom': '95th percentile range of motion [deg]',
-    'peak_velocity_median': 'Median peak velocity [deg/s]',
-    'peak_velocity_quantile_95': '95th percentile peak velocity [deg/s]',
+    'range_of_motion_median': 'Median range of motion [°]',
+    'median_rom': 'Median range of motion [°]',
+    'range_of_motion_quantile_95': '95th percentile range of motion [°]',
+    '95p_rom': '95th percentile range of motion [°]',
+    'peak_velocity_median': 'Median peak velocity [°/s]',
+    'peak_velocity_quantile_95': '95th percentile peak velocity [°/s]',
 }
 
 activity_map = {
