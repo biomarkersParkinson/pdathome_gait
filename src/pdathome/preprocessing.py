@@ -242,7 +242,7 @@ def preprocess_filtering_gait(subject):
 
         # load timestamps
         df_ts = pd.read_pickle(os.path.join(gc.paths.PATH_PREPARED_DATA, f'{subject}_{side}.pkl'))
-        df_ts['time'] = df_ts['time'].round(2)
+        df_ts[gc.columns.TIME] = df_ts[gc.columns.TIME].round(2)
 
         # load gait features
         df_features = pd.read_pickle(os.path.join(gc.paths.PATH_GAIT_FEATURES, f'{subject}_{side}.pkl'))
@@ -255,7 +255,7 @@ def preprocess_filtering_gait(subject):
             threshold = float(f.read())
 
         # Determine gait prediction per timestamp
-        l_cols_features = ['time']
+        l_cols_features = [gc.columns.TIME]
         df_predictions = pd.concat([df_features[l_cols_features], df_pred], axis=1)
         
         imu_config = IMUPreprocessingConfig()
@@ -265,21 +265,22 @@ def preprocess_filtering_gait(subject):
         # Step 1: Expand each window into individual timestamps
         expanded_data = []
         for _, row in df_predictions.iterrows():
-            start_time = row['time']
-            proba = row['pred_gait_proba']
+            start_time = row[gc.columns.TIME]
+            proba = row[gc.columns.PRED_GAIT_PROBA]
             timestamps = np.arange(start_time, start_time + gait_config.window_length_s, 1/gc.parameters.DOWNSAMPLED_FREQUENCY)
             expanded_data.extend(zip(timestamps, [proba] * len(timestamps)))
 
         # Create a new DataFrame with expanded timestamps
-        expanded_df = pd.DataFrame(expanded_data, columns=['time', 'pred_gait_proba'])
+        expanded_df = pd.DataFrame(expanded_data, columns=[gc.columns.TIME, gc.columns.PRED_GAIT_PROBA])
 
         # Step 2: Round timestamps to avoid floating-point inaccuracies
-        expanded_df['time'] = expanded_df['time'].round(2)
+        expanded_df[gc.columns.TIME] = expanded_df[gc.columns.TIME].round(2)
+        df_ts[gc.columns.TIME] = df_ts[gc.columns.TIME].round(2)
 
         # Step 3: Aggregate by unique timestamps and calculate the mean probability
-        expanded_df = expanded_df.groupby('time', as_index=False)['pred_gait_proba'].mean()
+        expanded_df = expanded_df.groupby(gc.columns.TIME, as_index=False)[gc.columns.PRED_GAIT_PROBA].mean()
 
-        df_ts = pd.merge(left=df_ts, right=expanded_df, how='left', on='time')
+        df_ts = pd.merge(left=df_ts, right=expanded_df, how='left', on=gc.columns.TIME)
 
         imu_config.acceleration_units = 'g'
         arm_activity_config.list_value_cols += [gc.columns.TIME, gc.columns.FREE_LIVING_LABEL]
