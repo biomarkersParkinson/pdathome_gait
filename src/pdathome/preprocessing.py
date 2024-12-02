@@ -423,6 +423,7 @@ def preprocess_filtering_gait(subject):
         df_features = pd.concat([df_features, df_features_angle], axis=1)
 
         # compute statistics of the temporal domain accelerometer signals
+        arm_activity_config.sensor = 'accelerometer'
         df_temporal_features = extract_temporal_domain_features(arm_activity_config, accel_windowed, grav_windowed, l_grav_stats=['mean', 'std'])
         df_features = pd.concat([df_features, df_temporal_features], axis=1)
 
