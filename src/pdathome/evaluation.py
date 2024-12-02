@@ -321,8 +321,7 @@ def generate_results_classification(step, subject):
             df = pd.merge(left=expanded_df, right=df_raw[l_raw_cols], how='left', on=gc.columns.TIME)
 
             # Use classification threshold to set predictions
-            df.loc[df[pred_proba_colname] >= clf_threshold, pred_colname] = 1
-            df.loc[df[pred_proba_colname] < clf_threshold, pred_colname] = 0
+            df[pred_colname] = (df[pred_proba_colname] >= clf_threshold).astype(int)
 
             if step == 'arm_activity':
                 activity_colname = pred_colname
@@ -345,6 +344,8 @@ def generate_results_classification(step, subject):
                 df[gc.columns.ARM_LABEL] = df.loc[~df[gc.columns.ARM_LABEL].isna(), gc.columns.ARM_LABEL].apply(lambda x: mp.arm_labels_rename[x])
             else:
                 df[gc.columns.PRE_OR_POST] = gc.descriptives.CONTROLS
+
+            df = df.loc[df[gc.columns.PRE_OR_POST].notna()]
         
             # statistics per arm activity
             if subject in gc.participant_ids.L_PD_IDS:
