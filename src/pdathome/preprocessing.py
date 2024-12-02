@@ -588,27 +588,30 @@ def arm_label_majority_voting(config, arm_label):
 
 def add_segment_category(config, df, activity_colname, segment_nr_colname,
                          segment_cat_colname, activity_value):
+    
+    df_activity = df.loc[df[activity_colname] == activity_value]
+
     # Create segments based on video-annotations of gait
     segments = create_segments(
         config=config,
-        df=df
+        df=df_activity
     )
 
     # Assign segment numbers to the raw data
-    df.loc[df[activity_colname] == activity_value, segment_nr_colname] = segments
+    df_activity[segment_nr_colname] = segments
 
     # Non-gait raw data is assigned a segment number of -1
     df[segment_nr_colname] = df[segment_nr_colname].fillna(-1)
 
     # Map categories to segments of video-annotated gait
     segments_cat = categorize_segments(
-        df=df.loc[(df[activity_colname] == activity_value) & (df[segment_nr_colname] != -1)],
+        df=df_activity.loc[df_activity[segment_nr_colname] != -1],
         segment_nr_colname=segment_nr_colname,
         sampling_frequency=gc.parameters.DOWNSAMPLED_FREQUENCY
     )
 
     # Assign segment categories to the raw data
-    df.loc[(df[activity_colname] == activity_value) & (df[segment_nr_colname] != -1), segment_cat_colname] = segments_cat
+    df_activity.loc[df_activity[segment_nr_colname] != -1, segment_cat_colname] = segments_cat
 
     # Non-gait raw data is assigned a segment category of -1
     df[segment_cat_colname] = df[segment_cat_colname].fillna(-1)

@@ -9,7 +9,7 @@ import seaborn as sns
 from scipy.stats import wilcoxon, ranksums
 from sklearn.metrics import roc_curve, auc
 
-from paradigma.gait.gait_analysis_config import GaitFeatureExtractionConfig, ArmActivityFeatureExtractionConfig
+from paradigma.gait.gait_analysis_config import GaitFeatureExtractionConfig, ArmActivityFeatureExtractionConfig, ArmSwingQuantificationConfig
 
 from pdathome.constants import global_constants as gc, mappings as mp
 from pdathome.preprocessing import add_segment_category
@@ -204,7 +204,7 @@ def generate_clinical_scores(subject):
     return d_clinical
 
 
-def generate_results_classification(step, subject, segment_gap_s):
+def generate_results_classification(step, subject):
 
     d_performance = {}
 
@@ -334,9 +334,8 @@ def generate_results_classification(step, subject, segment_gap_s):
             activity_value = 1
 
             df = add_segment_category(
-                df=df, activity_colname=activity_colname,
+                config=config, df=df, activity_colname=activity_colname,
                 segment_nr_colname=gc.columns.PRED_SEGMENT_NR, segment_cat_colname=gc.columns.PRED_SEGMENT_CAT,
-                time_colname=gc.columns.TIME, segment_gap_s=segment_gap_s, 
                 activity_value=activity_value)
             
             l_segment_cats.append(gc.columns.PRED_SEGMENT_CAT)
@@ -527,6 +526,7 @@ def load_arm_activity_timestamps(subject: str, side: str) -> pd.DataFrame:
 def generate_results_quantification(subject: str, segment_by: str) -> tuple[dict, pd.DataFrame]:
     """Generate quantification results for a given subject."""
     use_timestamps = False
+    config = ArmSwingQuantificationConfig()
 
     if segment_by == gc.columns.FREE_LIVING_LABEL:
         segment_nr_colname = gc.columns.TRUE_SEGMENT_NR
@@ -577,9 +577,9 @@ def generate_results_quantification(subject: str, segment_by: str) -> tuple[dict
     df_raw_las = pd.read_pickle(os.path.join(gc.paths.PATH_PREPARED_DATA, f'{subject}_{gc.descriptives.LEAST_AFFECTED_SIDE}.pkl')).assign(side=gc.descriptives.LEAST_AFFECTED_SIDE)
     df_raw = pd.concat([df_raw_mas, df_raw_las], axis=0)
 
-    df_raw = add_segment_category(df=df_raw, time_colname=gc.columns.TIME, segment_nr_colname=segment_nr_colname,
-                                segment_cat_colname=segment_cat_colname, activity_colname=activity_colname,
-                                segment_gap_s=gc.parameters.SEGMENT_GAP_GAIT, activity_value=activity_value)
+    df_raw = add_segment_category(config=config, df=df_raw, segment_nr_colname=segment_nr_colname,
+                                 segment_cat_colname=segment_cat_colname, activity_colname=activity_colname,
+                                 activity_value=activity_value)
     
     if subject in gc.participant_ids.L_HC_IDS:
         df_raw[gc.columns.PRE_OR_POST] = gc.descriptives.CONTROLS
@@ -699,7 +699,6 @@ def generate_results(subject, step):
         d_output =  generate_results_classification(
             step=step, 
             subject=subject,
-            segment_gap_s=1.5
         )
 
         if subject in gc.participant_ids.L_PD_IDS:
