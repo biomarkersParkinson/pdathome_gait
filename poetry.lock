@@ -1295,7 +1295,7 @@ tsdf = "^0.5.2"
 type = "git"
 url = "https://github.com/biomarkersParkinson/paradigma"
 reference = "increase_efficiency_gait"
-resolved_reference = "5a3062d980951cfac08993039f09e92d2fd4619b"
+resolved_reference = "c6d2b73c4c329a07c85ce4ba3c55161d1ef744f9"
 
 [[package]]
 name = "parso"

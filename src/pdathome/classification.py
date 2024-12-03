@@ -231,56 +231,18 @@ def windows_to_timestamps(subject, df, path_output, pred_proba_colname, step):
 
     # Define base gc.columns
     l_subj_cols = [gc.columns.SIDE, gc.columns.WINDOW_NR, pred_proba_colname]
-    l_merge_ts_cols = [gc.columns.WINDOW_NR, gc.columns.SIDE]
-    l_groupby_cols = [gc.columns.TIME, gc.columns.SIDE]
-    l_explode_cols = [gc.columns.TIME]
 
     if step == 'gait':
-        path_features = gc.paths.PATH_GAIT_FEATURES
         l_subj_cols += [gc.columns.GAIT_MAJORITY_VOTING, gc.columns.ACTIVITY_LABEL_MAJORITY_VOTING]
     elif step == 'arm_activity':
-        path_features = gc.paths.PATH_ARM_ACTIVITY_FEATURES
         if subject in gc.participant_ids.L_PD_IDS:
-            l_subj_cols += [gc.columns.NO_OTHER_ARM_ACTIVITY_MAJORITY_VOTING, gc.columns.ARM_LABEL_MAJORITY_VOTING]
-
-    # Select relevant gc.columns
-    # df = df[l_subj_cols]     
+            l_subj_cols += [gc.columns.NO_OTHER_ARM_ACTIVITY_MAJORITY_VOTING, gc.columns.ARM_LABEL_MAJORITY_VOTING]   
 
     for side in [gc.descriptives.MOST_AFFECTED_SIDE, gc.descriptives.LEAST_AFFECTED_SIDE]:
         df_side = df[df[gc.columns.SIDE] == side]
         df_side = df_side.reset_index(drop=True)
 
         df_side[pred_proba_colname].to_pickle(os.path.join(path_output, f'{subject}_{side}.pkl'))
-
-    # df.to_pickle(os.path.join(path_output, f'{subject}_df.pkl'))
-    
-    # # Load and combine timestamps data
-    # df_ts_mas = pd.read_pickle(os.path.join(path_features, f'{subject}_{gc.descriptives.MOST_AFFECTED_SIDE}_ts.pkl')).assign(side=gc.descriptives.MOST_AFFECTED_SIDE)
-    # df_ts_las = pd.read_pickle(os.path.join(path_features, f'{subject}_{gc.descriptives.LEAST_AFFECTED_SIDE}_ts.pkl')).assign(side=gc.descriptives.LEAST_AFFECTED_SIDE)
-
-    # df_ts_mas = df_ts_mas.reset_index(drop=True)
-    # df_ts_las = df_ts_las.reset_index(drop=True)
-
-    # df_ts = pd.concat([df_ts_mas, df_ts_las], ignore_index=True)
-
-    # # Explode timestamp data for merging
-    # df_ts_exploded = df_ts.explode(l_explode_cols)
-
-    # # Merge the exploded data with windowed data
-    # df_single_points = pd.merge(left=df_ts_exploded, right=df, how='left', on=l_merge_ts_cols)
-        
-    # # Reset index after merging
-    # df_single_points.reset_index(drop=True, inplace=True)
-
-    # # Group by relevant gc.columns and calculate mean prediction probability
-    # df_pred_per_point = df_single_points.groupby(l_groupby_cols)[pred_proba_colname].mean().reset_index()
-
-    # # Save the final result
-    # save_to_pickle(
-    #     df=df_pred_per_point,
-    #     path=path_output,
-    #     filename=f'{subject}.pkl'
-    # )
 
 
 def store_model_output(df, classifier_name, step, n_jobs=-1):
@@ -355,6 +317,7 @@ def store_model_output(df, classifier_name, step, n_jobs=-1):
 
     # Save the scaler parameters as JSON
     scaler_params = {
+        'features': l_predictors_scaled,
         'mean': scaler.mean_.tolist(),
         'var': scaler.var_.tolist(),
         'scale': scaler.scale_.tolist()

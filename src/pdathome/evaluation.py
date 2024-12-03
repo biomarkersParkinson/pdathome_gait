@@ -214,7 +214,9 @@ def generate_results_classification(step, subject):
         d_performance[model] = {}
 
         if step == 'gait':
+
             # Paths
+            path_features = gc.paths.PATH_GAIT_FEATURES
             path_predictions = gc.paths.PATH_GAIT_PREDICTIONS
 
             # Columns
@@ -229,7 +231,9 @@ def generate_results_classification(step, subject):
             arm_label_metric = 'sens'
 
         else:
+
             # Paths
+            path_features = gc.paths.PATH_ARM_ACTIVITY_FEATURES
             path_predictions = gc.paths.PATH_ARM_ACTIVITY_PREDICTIONS
 
             # Columns
@@ -241,7 +245,7 @@ def generate_results_classification(step, subject):
             boolean_colname = 'no_other_arm_activity'
             value_label = 'Gait without other behaviours or other positions'
 
-            arm_label_metric = 'sens'
+            arm_label_metric = 'spec'
 
         with open(os.path.join(gc.paths.PATH_THRESHOLDS, step, f'{model}.txt'), 'r') as f:
             clf_threshold = float(f.read())
@@ -261,26 +265,26 @@ def generate_results_classification(step, subject):
 
             if step == 'gait' and subject in gc.participant_ids.L_TREMOR_IDS:
                 l_raw_cols.append(gc.columns.TREMOR_LABEL)
-        
-        # Set segment column names for annotations
-        if step == 'gait':
-            activity_colname = gc.columns.FREE_LIVING_LABEL
-            activity_value = 'Walking'
-            config = GaitFeatureExtractionConfig()
-
-        elif step == 'arm_activity':
-            config = ArmActivityFeatureExtractionConfig()
-            if subject in gc.participant_ids.L_PD_IDS:
-                activity_colname = gc.columns.ARM_LABEL
-                activity_value = 'Gait without other behaviours or other positions' # TEMPORARILY TRY WITH ARM ACTIVITY INSTEAD OF GAIT
-            else:
-                activity_colname = gc.columns.FREE_LIVING_LABEL
-                activity_value = 'Walking'
 
         l_segment_cats.append(gc.columns.TRUE_SEGMENT_CAT)
 
         for side in [gc.descriptives.MOST_AFFECTED_SIDE, gc.descriptives.LEAST_AFFECTED_SIDE]:
             d_performance[model][side] = {}
+
+            # Set segment column names for annotations
+            if step == 'gait':
+                activity_colname = gc.columns.FREE_LIVING_LABEL
+                activity_value = 'Walking'
+                config = GaitFeatureExtractionConfig()
+
+            elif step == 'arm_activity':
+                config = ArmActivityFeatureExtractionConfig()
+                if subject in gc.participant_ids.L_PD_IDS:
+                    activity_colname = gc.columns.ARM_LABEL
+                    activity_value = 'Gait without other behaviours or other positions' # TEMPORARILY TRY WITH ARM ACTIVITY INSTEAD OF GAIT
+                else:
+                    activity_colname = gc.columns.FREE_LIVING_LABEL
+                    activity_value = 'Walking'
 
             df_raw = pd.read_pickle(os.path.join(gc.paths.PATH_PREPARED_DATA, f'{subject}_{side}.pkl')).assign(side=side)
 
@@ -294,7 +298,7 @@ def generate_results_classification(step, subject):
             df_predictions = pd.read_pickle(os.path.join(path_predictions, model, f'{subject}_{side}.pkl'))
 
             # load gait features
-            df_features = pd.read_pickle(os.path.join(gc.paths.PATH_GAIT_FEATURES, f'{subject}_{side}.pkl'))
+            df_features = pd.read_pickle(os.path.join(path_features, f'{subject}_{side}.pkl'))
 
             # Determine gait prediction per timestamp
             df_predictions = pd.concat([df_features[gc.columns.TIME], df_predictions], axis=1)
@@ -388,40 +392,41 @@ def generate_results_classification(step, subject):
                 for segment_cat_type in l_segment_cats:
                     d_performance[model][side][med_stage][f'{segment_cat_type}_duration'] = {}
                     for segment_duration in df_med_stage[segment_cat_type].unique():
-                        d_performance[model][side][med_stage][f'{segment_cat_type}_duration'][segment_duration] = {}
-                        df_segments_cat = df_med_stage.loc[df_med_stage[segment_cat_type] == segment_duration]
+                        if pd.notna(segment_duration):
+                            d_performance[model][side][med_stage][f'{segment_cat_type}_duration'][segment_duration] = {}
+                            df_segments_cat = df_med_stage.loc[df_med_stage[segment_cat_type] == segment_duration]
 
-                        cat_minutes_pred = df_segments_cat.loc[df_segments_cat[pred_colname] == outcome_value].shape[0] / gc.parameters.DOWNSAMPLED_FREQUENCY / 60
-                        d_performance[model][side][med_stage][f'{segment_cat_type}_duration'][segment_duration]['minutes_pred'] = cat_minutes_pred
+                            cat_minutes_pred = df_segments_cat.loc[df_segments_cat[pred_colname] == outcome_value].shape[0] / gc.parameters.DOWNSAMPLED_FREQUENCY / 60
+                            d_performance[model][side][med_stage][f'{segment_cat_type}_duration'][segment_duration]['minutes_pred'] = cat_minutes_pred
 
-                        if not (subject in gc.participant_ids.L_HC_IDS and step == 'arm_activity'):
-                            cat_minutes_true = df_segments_cat.loc[df_segments_cat[boolean_colname] == outcome_value].shape[0] / gc.parameters.DOWNSAMPLED_FREQUENCY / 60
-                            d_performance[model][side][med_stage][f'{segment_cat_type}_duration'][segment_duration]['minutes_true'] = cat_minutes_true
+                            if not (subject in gc.participant_ids.L_HC_IDS and step == 'arm_activity'):
+                                cat_minutes_true = df_segments_cat.loc[df_segments_cat[boolean_colname] == outcome_value].shape[0] / gc.parameters.DOWNSAMPLED_FREQUENCY / 60
+                                d_performance[model][side][med_stage][f'{segment_cat_type}_duration'][segment_duration]['minutes_true'] = cat_minutes_true
 
-                            if segment_duration != 'non_gait':
-                                for metric in ['sens', 'spec']:
-                                    d_performance[model][side][med_stage][f'{segment_cat_type}_duration'][segment_duration][metric] = calculate_metric(
-                                        df=df_segments_cat, pred_colname=pred_colname, true_colname=boolean_colname, metric=metric)
+                                if segment_duration != 'non_gait':
+                                    for metric in ['sens', 'spec']:
+                                        d_performance[model][side][med_stage][f'{segment_cat_type}_duration'][segment_duration][metric] = calculate_metric(
+                                            df=df_segments_cat, pred_colname=pred_colname, true_colname=boolean_colname, metric=metric)
 
-                                # Append to prevalence_data list
-                                if segment_cat_type == gc.columns.TRUE_SEGMENT_CAT:
-                                    prevalence_data.append({
-                                        'minutes': cat_minutes_true,
-                                        metric_to_correct: d_performance[model][side][med_stage][f'{segment_cat_type}_duration'][segment_duration][metric_to_correct],
-                                        f'{segment_cat_type}_duration': segment_duration,
-                                        gc.columns.PRE_OR_POST: med_stage
-                                    })
+                                    # Append to prevalence_data list
+                                    if segment_cat_type == gc.columns.TRUE_SEGMENT_CAT:
+                                        prevalence_data.append({
+                                            'minutes': cat_minutes_true,
+                                            metric_to_correct: d_performance[model][side][med_stage][f'{segment_cat_type}_duration'][segment_duration][metric_to_correct],
+                                            f'{segment_cat_type}_duration': segment_duration,
+                                            gc.columns.PRE_OR_POST: med_stage
+                                        })
 
-                                if subject in gc.participant_ids.L_PD_IDS:
-                                    d_performance[model][side][med_stage][f'{segment_cat_type}_duration'][segment_duration]['arm_activities'] = {}
+                                    if subject in gc.participant_ids.L_PD_IDS:
+                                        d_performance[model][side][med_stage][f'{segment_cat_type}_duration'][segment_duration]['arm_activities'] = {}
 
-                                    for arm_label in df_segments_cat[gc.columns.ARM_LABEL].unique():
-                                        df_arm_activity = df_segments_cat.loc[df_segments_cat[gc.columns.ARM_LABEL]==arm_label]
+                                        for arm_label in df_segments_cat[gc.columns.ARM_LABEL].unique():
+                                            df_arm_activity = df_segments_cat.loc[df_segments_cat[gc.columns.ARM_LABEL]==arm_label]
 
-                                        d_performance[model][side][med_stage][f'{segment_cat_type}_duration'][segment_duration]['arm_activities'][arm_label] = {
-                                            'minutes': df_arm_activity.shape[0]/gc.parameters.DOWNSAMPLED_FREQUENCY/60,
-                                            arm_label_metric: calculate_metric(df=df_arm_activity, pred_colname=pred_colname, true_colname=boolean_colname, metric=arm_label_metric)
-                                        }
+                                            d_performance[model][side][med_stage][f'{segment_cat_type}_duration'][segment_duration]['arm_activities'][arm_label] = {
+                                                'minutes': df_arm_activity.shape[0]/gc.parameters.DOWNSAMPLED_FREQUENCY/60,
+                                                arm_label_metric: calculate_metric(df=df_arm_activity, pred_colname=pred_colname, true_colname=boolean_colname, metric=arm_label_metric)
+                                            }
 
                 # minutes of data per activity of mas
                 if step == 'gait': 
