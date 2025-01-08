@@ -6,153 +6,168 @@ import numpy as np
 from pdathome.constants import global_constants as gc
 
 def load_sensor_data(path, file_name, tab, subject, wrist_pos):
-    with h5py.File(os.path.join(path, file_name)) as opened_file:
-        l_subjects_in_file = []
-        for ind in range(opened_file[tab][gc.columns.ID].shape[0]):
-            l_subjects_in_file.append(''.join([chr(x) for x in np.array(opened_file[opened_file[tab][gc.columns.ID][ind, 0]]).flatten()]))
+    with h5py.File(os.path.join(path, file_name), 'r') as opened_file:
+        ids_dataset = opened_file[tab][gc.columns.ID]
+        l_subjects_in_file = [
+            ''.join(map(chr, opened_file[ids_dataset[ind, 0]][()].flatten()))
+            for ind in range(ids_dataset.shape[0])
+        ]
 
-        if subject in l_subjects_in_file:
-            subject_index = l_subjects_in_file.index(subject)
-            df_acc =  pd.DataFrame(np.array(opened_file[opened_file[tab][wrist_pos][subject_index,0]]['accel'])).T.set_axis([gc.columns.TIME, gc.columns.ACCELEROMETER_X, gc.columns.ACCELEROMETER_Y, gc.columns.ACCELEROMETER_Z], axis=1)
-            df_gyro = pd.DataFrame(np.array(opened_file[opened_file[tab][wrist_pos][subject_index,0]]['gyro'])).T.set_axis([gc.columns.TIME, gc.columns.GYROSCOPE_X, gc.columns.GYROSCOPE_Y, gc.columns.GYROSCOPE_Z], axis=1)
-            
-            peakstart = opened_file[opened_file[tab]['peakstart'][subject_index][0]][0,0]
-            peakend = opened_file[opened_file[tab]['peakend'][subject_index][0]][0,0]
-            return pd.merge(left=df_acc, right=df_gyro, how='left', on=gc.columns.TIME), peakstart, peakend
-        else:
+        if subject not in l_subjects_in_file:
             print(f"Subject {subject} not in file")
-            return
+            return None, None, None
+
+    
+        subject_index = l_subjects_in_file.index(subject)
+        wrist_data = opened_file[opened_file[tab][wrist_pos][subject_index, 0]]
+
+        df_acc = pd.DataFrame(wrist_data['accel'][()].T, columns=[
+            gc.columns.TIME, gc.columns.ACCELEROMETER_X, gc.columns.ACCELEROMETER_Y, gc.columns.ACCELEROMETER_Z
+        ])
+        df_gyro = pd.DataFrame(wrist_data['gyro'][()].T, columns=[
+            gc.columns.TIME, gc.columns.GYROSCOPE_X, gc.columns.GYROSCOPE_Y, gc.columns.GYROSCOPE_Z
+        ])
+        
+        peakstart = opened_file[opened_file[tab]['peakstart'][subject_index][0]][0,0]
+        peakend = opened_file[opened_file[tab]['peakend'][subject_index][0]][0,0]
+
+        df_sensors = pd.merge(left=df_acc, right=df_gyro, how='left', on=gc.columns.TIME)
+        return df_sensors, peakstart, peakend
+
         
 
 def load_video_annotations(path_annotations, subject):
+    def process_annotations(file_path, column_names):
+        """Reads and processes an annotation file."""
+        if f'{subject}_annotations' in file_path:
+            df = pd.read_csv(file_path, delimiter=',', header=None, names=column_names)
+        else:
+            df = pd.read_csv(file_path, delimiter=',')
 
-    if subject in gc.participant_ids.L_PD_IDS:
-        file_name = f'{subject}_annotations.csv'
-        file_name_part_1 = f'{subject}_annotations_part1.csv'
-        file_name_part_2 = f'{subject}_annotations_part2.csv'
+        df.columns = df.columns.str.lower()
+
+        if 'duration' in df.columns:
+            df = df.drop(columns=['duration'])
+        if 'nan' in df.columns:
+            df = df.drop(columns=['nan'])
+
+        return df.reset_index(drop=True)
+    
+    # Define file names
+    if subject in gc.participant_ids.PD_IDS:
+        file_name = f"{subject}_annotations.csv"
+        file_name_part_1 = f"{subject}_annotations_part1.csv"
+        file_name_part_2 = f"{subject}_annotations_part2.csv"
     else:
-        file_name = f'table_{subject}.csv'
+        file_name = f"table_{subject}.csv"
 
-    if subject in gc.participant_ids.L_TREMOR_IDS:
-        df_tremor = pd.read_csv(os.path.join(path_annotations, f'table_tremor_{subject}.csv'))
-        df_tremor = df_tremor.drop(columns=['Label'])
-        df_tremor = df_tremor.rename(columns={'Tier': 'tier',
-                                            'Start': 'start_s',
-                                            'End': 'end_s',
-                                            'Duration': 'duration_s',
-                                            'Code': 'code'})
+    # Load tremor annotations if applicable
+    if subject in gc.participant_ids.TREMOR_IDS:
+        tremor_file = os.path.join(path_annotations, f"table_tremor_{subject}.csv")
+        df_tremor = process_annotations(tremor_file, gc.columns.ARM_ACTIVITY_ANNOTATIONS)
+    else:
+        df_tremor = None
         
-    if subject not in gc.participant_ids.L_W_PARTS and subject in gc.participant_ids.L_PD_IDS:
-        df_annotations = pd.read_csv(os.path.join(path_annotations, file_name), delimiter=',',
-                        header=None, names=gc.columns.L_ARM_ACTIVITY_ANNOTATIONS)
+    # Handle PD subjects without parts
+    if subject in gc.participant_ids.PD_IDS and subject not in gc.participant_ids.W_PARTS:
+        annotations_path = os.path.join(path_annotations, file_name)
+        df_annotations = process_annotations(annotations_path, gc.columns.ARM_ACTIVITY_ANNOTATIONS)
 
-        split_time = df_annotations.loc[(df_annotations['tier']=='General protocol structure') & (df_annotations['code']==5), 'end_s'].values[0]
+        # Split based on protocol structure
+        split_time = df_annotations.loc[
+            (df_annotations['tier'] == 'General protocol structure') & (df_annotations['code'] == 5),
+            'end'
+        ].values[0]
 
-        df_annotations_part_1 = df_annotations.loc[df_annotations['end_s']<=split_time].copy()
-        df_annotations_part_2 = df_annotations.loc[df_annotations['end_s']>split_time].copy()
+        df_annotations_part_1 = df_annotations.loc[df_annotations['end'] <= split_time].copy()
+        df_annotations_part_2 = df_annotations.loc[df_annotations['end'] > split_time].copy()
 
-        if subject in gc.participant_ids.L_TREMOR_IDS:
-            df_tremor_part_1 = df_tremor.loc[df_tremor['end_s']<=split_time].copy()
-            df_tremor_part_2 = df_tremor.loc[df_tremor['end_s']>split_time].copy()
+        if df_tremor is not None:
+            df_tremor_part_1 = df_tremor.loc[df_tremor['end'] <= split_time].copy()
+            df_tremor_part_2 = df_tremor.loc[df_tremor['end'] > split_time].copy()
+            
+            df_annotations_part_1 = pd.concat([df_annotations_part_1, df_tremor_part_1], ignore_index=True)
+            df_annotations_part_2 = pd.concat([df_annotations_part_2, df_tremor_part_2], ignore_index=True)
 
-    elif subject in gc.participant_ids.L_PD_IDS:
-        df_annotations_part_1 = pd.read_csv(os.path.join(path_annotations, file_name_part_1), delimiter=',',
-                                            header=None, names=gc.columns.L_ARM_ACTIVITY_ANNOTATIONS)
-        df_annotations_part_2 = pd.read_csv(os.path.join(path_annotations, file_name_part_2), delimiter=',',
-                                            header=None, names=gc.columns.L_ARM_ACTIVITY_ANNOTATIONS)
+    # Handle PD subjects with parts
+    elif subject in gc.participant_ids.PD_IDS:
+        annotations_path_part_1 = os.path.join(path_annotations, file_name_part_1)
+        annotations_path_part_2 = os.path.join(path_annotations, file_name_part_2)
+        df_annotations_part_1 = process_annotations(annotations_path_part_1, gc.columns.ARM_ACTIVITY_ANNOTATIONS)
+        df_annotations_part_2 = process_annotations(annotations_path_part_2, gc.columns.ARM_ACTIVITY_ANNOTATIONS)
         
-        if subject in gc.participant_ids.L_TREMOR_IDS:
-            df_tremor_part_1 = df_tremor.loc[df_tremor['end_s']<=df_annotations_part_1['end_s'].max()]
-            df_tremor_part_2 = df_tremor.loc[df_tremor['start_s']>=df_annotations_part_1['start_s'].min()]
+        if df_tremor is not None:
+            df_tremor_part_1 = df_tremor.loc[df_tremor['end'] <= df_annotations_part_1['end'].max()]
+            df_tremor_part_2 = df_tremor.loc[df_tremor['start'] >= df_annotations_part_1['start'].min()]
+
+            df_annotations_part_1 = pd.concat([df_annotations_part_1, df_tremor_part_1], ignore_index=True)
+            df_annotations_part_2 = pd.concat([df_annotations_part_2, df_tremor_part_2], ignore_index=True)
                                              
+    # Handle non-PD subjects
     else:
-        df_annotations = pd.read_csv(os.path.join(path_annotations, file_name))
-    
-    if subject in gc.participant_ids.L_PD_IDS:
-        df_annotations_part_1.columns = df_annotations_part_1.columns.str.lower()
-        df_annotations_part_2.columns = df_annotations_part_2.columns.str.lower()
-
-        if 'duration' in df_annotations_part_1.columns:
-            df_annotations_part_1 = df_annotations_part_1.drop(columns=['duration'])
-
-        if 'duration' in df_annotations_part_2.columns:
-            df_annotations_part_2 = df_annotations_part_2.drop(columns=['duration'])
-
-        if 'nan' in df_annotations_part_1.columns:
-            df_annotations_part_1 = df_annotations_part_1.drop(columns=['nan'])
-
-        if 'nan' in df_annotations_part_2.columns:
-            df_annotations_part_2 = df_annotations_part_2.drop(columns=['nan'])
-
-        if subject in gc.participant_ids.L_TREMOR_IDS:
-            df_annotations_part_1 = pd.concat([df_annotations_part_1, df_tremor_part_1]).reset_index(drop=True)
-            df_annotations_part_2 = pd.concat([df_annotations_part_2, df_tremor_part_2]).reset_index(drop=True)
-
-        df_annotations_part_1 = df_annotations_part_1.reset_index(drop=True)
-        df_annotations_part_2 = df_annotations_part_2.reset_index(drop=True)
-
-        return df_annotations_part_1, df_annotations_part_2
-    
-    else:
-        df_annotations.columns = df_annotations.columns.str.lower()
-
-        if 'duration' in df_annotations.columns:
-            df_annotations = df_annotations.drop(columns=['duration'])
-
-        df_annotations = df_annotations.reset_index(drop=True)
-
+        annotations_path = os.path.join(path_annotations, file_name)
+        df_annotations = process_annotations(annotations_path, gc.columns.ARM_ACTIVITY_ANNOTATIONS)
         return df_annotations
+
+    return df_annotations_part_1, df_annotations_part_2
     
 
-def load_stage_start_end(path_labels, subject):
-    if subject in gc.participant_ids.L_PD_IDS:
+def load_stage_start_end(path_labels, subject_id):
+    if subject_id in gc.participant_ids.PD_IDS:
         file_name = 'labels_PD_phys_sharing_v7-3.mat'
-        prestart = 'premedstart'
-        preend = 'premedend'
-        poststart = 'postmedstart'
-        postend = 'postmedend'
+        label_map = {'prestart': 'premedstart', 'preend': 'premedend', 'poststart': 'postmedstart', 'postend': 'postmedend'}
     else:
         file_name = 'labels_HC_phys_sharing_v7-3.mat'
-        prestart = 'prestart'
-        preend = 'preend'
-        poststart = 'poststart'
-        postend = 'postend'
+        label_map = {'prestart': 'prestart', 'preend': 'preend', 'poststart': 'poststart', 'postend': 'postend'}
+
+    file_path = os.path.join(path_labels, file_name)
         
-    with h5py.File(os.path.join(path_labels, file_name)) as f:
-        n_subjects_in_table = f['labels'][gc.columns.ID].shape[0]
-        l_subjects_in_table = []
+    with h5py.File(file_path) as f:
+        # Extract subject IDs from the .mat file
+        subjects_table = f['labels'][gc.columns.ID]
+        subject_ids = [
+            ''.join([chr(x) for x in np.array(f[subjects_table[ind, 0]]).flatten()])
+            for ind in range(subjects_table.shape[0])
+        ]
 
-        for ind in range(n_subjects_in_table):
-            l_subjects_in_table.append(''.join([chr(x) for x in np.array(f[f['labels'][gc.columns.ID][ind, 0]]).flatten()]))
+        if subject_id not in subject_ids:
+            print(f"Subject {subject_id} not in population")
+            return None
+        
+        # Get the subject's index
+        subject_index = subject_ids.index(subject_id)
 
-        if subject in l_subjects_in_table:
-            subject_index = l_subjects_in_table.index(subject)
-            prestart = f[f['labels'][prestart][subject_index][0]][0,0]
-            preend = f[f['labels'][preend][subject_index][0]][0,0]
+        # Fetch pre-med and post-med start/end times
+        prestart = f[f['labels'][label_map['prestart']][subject_index][0]][0, 0]
+        preend = f[f['labels'][label_map['preend']][subject_index][0]][0, 0]
 
-            if not subject in gc.participant_ids.L_PRE_IDS:
-                poststart = f[f['labels'][poststart][subject_index][0]][0,0]
-                postend = f[f['labels'][postend][subject_index][0]][0,0]
-            else:
-                poststart = np.nan
-                postend = np.nan
+        if subject_id in gc.participant_ids.PRE_IDS:
+            poststart, postend = np.nan, np.nan
         else:
-            print("Subject not in population")
-            return
+            poststart = f[f['labels'][label_map['poststart']][subject_index][0]][0, 0]
+            postend = f[f['labels'][label_map['postend']][subject_index][0]][0, 0]
         
         return prestart, preend, poststart, postend
     
 
-def load_dataframes_directory(directory_path, l_ids):
-    l_dfs = []
-    for id in l_ids:
-        df_subj_mas = pd.read_pickle(os.path.join(directory_path, f'{id}_{gc.descriptives.MOST_AFFECTED_SIDE}.pkl'))
-        df_subj_las = pd.read_pickle(os.path.join(directory_path, f'{id}_{gc.descriptives.LEAST_AFFECTED_SIDE}.pkl'))
-        df_subj_mas['side'] = gc.descriptives.MOST_AFFECTED_SIDE
-        df_subj_las['side'] = gc.descriptives.LEAST_AFFECTED_SIDE
-        df_subj = pd.concat([df_subj_mas, df_subj_las])
-        df_subj[gc.columns.ID] = id
-        df_subj = df_subj.reset_index(drop=True)
-        l_dfs.append(df_subj)
+def load_dataframes_directory(directory_path, subject_ids):
+    dfs = []
+    for subject_id in subject_ids:
+        mas_path = os.path.join(directory_path, f'{subject_id}_{gc.descriptives.MOST_AFFECTED_SIDE}.parquet')
+        las_path = os.path.join(directory_path, f'{subject_id}_{gc.descriptives.LEAST_AFFECTED_SIDE}.parquet')
+
+        try:
+            df_mas = pd.read_parquet(mas_path)
+            df_las = pd.read_parquet(las_path)
+        except FileNotFoundError as e:
+            print(f"Warning: {e}")
+            continue
+
+        df_mas['affected_side'] = gc.descriptives.MOST_AFFECTED_SIDE
+        df_las['affected_side'] = gc.descriptives.LEAST_AFFECTED_SIDE
+
+        df_subject = pd.concat([df_mas, df_las], ignore_index=True)
+        df_subject[gc.columns.ID] = subject_id
+        dfs.append(df_subject)
         
-    return pd.concat(l_dfs).reset_index(drop=True)
+    return pd.concat(dfs, ignore_index=True) if dfs else pd.DataFrame()
