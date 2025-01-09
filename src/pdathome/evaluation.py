@@ -603,10 +603,7 @@ def load_arm_activity_timestamps(subject: str, affected_side: str) -> pd.DataFra
 
 
 def generate_results_quantification(subject: str) -> tuple[dict, pd.DataFrame]:
-    """Generate quantification results for a given subject."""
-    use_timestamps = True
-    config = ArmSwingQuantificationConfig()
-        
+    """Generate quantification results for a given subject."""      
     l_raw_cols = [gc.columns.TIME, gc.columns.AFFECTED_SIDE, gc.columns.FREE_LIVING_LABEL]
 
     # For PD, keep the segments of annotations for each step
@@ -618,18 +615,14 @@ def generate_results_quantification(subject: str) -> tuple[dict, pd.DataFrame]:
 
     d_quantification = {}
 
-    es_mrom = compute_effect_size(df, 'range_of_motion', 'median', segment_cat_colname=segment_cat_colname)
-    es_prom = compute_effect_size(df, 'range_of_motion', '95', segment_cat_colname=segment_cat_colname)
+    es_mrom = compute_effect_size(df, 'range_of_motion', 'median', segment_cat_colname=gc.columns.TRUE_SEGMENT_CAT)
+    es_prom = compute_effect_size(df, 'range_of_motion', '95', segment_cat_colname=gc.columns.TRUE_SEGMENT_CAT)
 
     d_quantification['effect_size'] = {
         'median_rom': es_mrom,
         '95p_rom': es_prom
     }
 
-    # for dataset in diff_mrom.keys():
-    #     df_diff = pd.concat([df_diff, pd.DataFrame([subject, dataset, diff_mrom[dataset], diff_prom[dataset]]).T])
-
-    # df_diff.columns = [gc.columns.ID, 'dataset', 'diff_median_rom', 'diff_95p_rom']
     return d_quantification #, df_diff
 
 
@@ -656,14 +649,12 @@ def generate_results(subject, step):
         return 
 
     else:
-        segment_by = gc.columns.FREE_LIVING_LABEL
-
         if subject in gc.participant_ids.PD_IDS + gc.participant_ids.HC_IDS:
             print(f"Processing {subject} - {step}...")
 
             json_filename = f'{subject}.json'
 
-            d_output = generate_results_quantification(subject, segment_by)
+            d_output = generate_results_quantification(subject)
 
             with open(os.path.join(gc.paths.PATH_OUTPUT, 'quantification', json_filename), 'w') as f:
                 json.dump(d_output, f, indent=4)

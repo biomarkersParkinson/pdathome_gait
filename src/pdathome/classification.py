@@ -2,7 +2,6 @@ import json
 import numpy as np
 import os
 import pandas as pd
-import pickle
 import warnings
 
 from sklearn.ensemble import RandomForestClassifier
@@ -14,11 +13,13 @@ from sklearn.preprocessing import StandardScaler
 from typing import Callable, List
 
 from paradigma.config import GaitFeatureExtractionConfig, ArmActivityFeatureExtractionConfig
+from paradigma.classification import ClassifierPackage
 
 from pdathome.constants import global_constants as gc
 from pdathome.load import load_dataframes_directory
 
 warnings.filterwarnings("ignore", category=ConvergenceWarning)
+        
 
 def train_test(
     subject_id: str,
@@ -185,9 +186,7 @@ def store_model_output(df, classifier_name, step, n_jobs=-1):
     class_weight = None if step == 'gait' else 'balanced'
     target_column_name = gc.columns.GAIT_MAJORITY_VOTING if step == 'gait' else gc.columns.NO_OTHER_ARM_ACTIVITY_MAJORITY_VOTING
 
-    drop_cols = ['range_of_motion', 'forward_peak_velocity_mean', 'backward_peak_velocity_mean',
-                   'forward_peak_velocity_std', 'backward_peak_velocity_std']
-    predictors = [x for x in list(config.d_channels_values.keys()) if x not in drop_cols]
+    predictors = list(config.d_channels_values.keys())
     predictors_scaled = [x for x in predictors if 'dominant' not in x]
 
     # Standardize features based on the PD subjects    
@@ -211,12 +210,16 @@ def store_model_output(df, classifier_name, step, n_jobs=-1):
     if classifier_name == gc.classifiers.RANDOM_FOREST:
         del clf.oob_decision_function_
 
-    # Save model, coefficients, and scaler
-    save_model(clf, step, classifier_name)
-    save_scaler_params(scaler, predictors_scaled, step, classifier_name)
-
     classification_threshold = determine_classification_threshold(step, clf, df_train, predictors, target_column_name, pd_train_mask=df_pd.index)
-    save_threshold(classification_threshold, subject='all', classifier_name=classifier_name, step=step, path_thresholds=gc.paths.PATH_THRESHOLDS)
+
+    # Save model, coefficients, and scaler
+    clf_package = ClassifierPackage(
+        classifier=clf,
+        scaler=scaler,
+        threshold=classification_threshold
+    )
+
+    clf_package.save(filepath=os.path.join(gc.paths.PATH_CLASSIFIERS, step, f'{classifier_name}.pkl'))
 
     # Special case for arm activity: predict control group
     if step == 'arm_activity':
@@ -335,12 +338,12 @@ def save_predictions(df_test, subject, path_predictions, classifier_name):
         df_aff_side.reset_index(drop=True).to_parquet(output_file)
 
 
-def save_model(clf, step, classifier_name):
-    """Save the trained classifier as a pickle file."""
-    model_path = os.path.join(gc.paths.PATH_CLASSIFIERS, step, f'{classifier_name}.pkl')
-    os.makedirs(os.path.dirname(model_path), exist_ok=True)
-    with open(model_path, 'wb') as f:
-        pickle.dump(clf, f)
+# def save_model(clf, step, classifier_name):
+#     """Save the trained classifier as a pickle file."""
+#     model_path = os.path.join(gc.paths.PATH_CLASSIFIERS, step, f'{classifier_name}.pkl')
+#     os.makedirs(os.path.dirname(model_path), exist_ok=True)
+#     with open(model_path, 'wb') as f:
+#         pickle.dump(clf, f)
 
 
 def save_threshold(classification_threshold, subject, classifier_name, step, path_thresholds):

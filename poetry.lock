@@ -1251,8 +1251,8 @@ tsdf = "^0.5.2"
 [package.source]
 type = "git"
 url = "https://github.com/biomarkersParkinson/paradigma"
-reference = "arm-swing-quantification"
-resolved_reference = "076dcd2855d13f314aca85f848a89cc0e148143d"
+reference = "create-classifier-objects"
+resolved_reference = "a3fe96d596b87dc71fa99b5c760355f1212db6db"
 
 [[package]]
 name = "parso"
@@ -2392,4 +2392,4 @@ viz = ["cartopy", "matplotlib", "nc-time-axis", "seaborn"]
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.11"
-content-hash = "1d20dd683a231431e2009fdcee6ea33abfa209020b7565264fc9ce6afc1a4fb9"
+content-hash = "377c49c860fb15d5902e346bfd2d7d878063ea2c9ee063f8fad4bcbaa0976cd4"
