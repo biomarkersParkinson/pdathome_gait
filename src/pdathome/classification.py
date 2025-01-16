@@ -219,7 +219,8 @@ def store_model_output(df, classifier_name, step, n_jobs=-1):
         threshold=classification_threshold
     )
 
-    clf_package.save(filepath=os.path.join(gc.paths.PATH_CLASSIFIERS, step, f'{classifier_name}.pkl'))
+    clf_filepath = os.path.join(gc.paths.PATH_CLASSIFIERS, step, f'{classifier_name}.pkl')
+    clf_package.save(filepath=clf_filepath)
 
     # Special case for arm activity: predict control group
     if step == 'arm_activity':

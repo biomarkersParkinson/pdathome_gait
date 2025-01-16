@@ -6,12 +6,11 @@ import pandas as pd
 from collections import Counter
 from scipy.interpolate import interp1d
 
-from paradigma.gait.feature_extraction import extract_temporal_domain_features, extract_spectral_domain_features
-from paradigma.gait.gait_analysis import merge_predictions_with_timestamps
+from paradigma.pipelines.gait_pipeline import extract_temporal_domain_features, extract_spectral_domain_features
+from paradigma.pipelines.gait_pipeline import merge_predictions_with_timestamps
 from paradigma.preprocessing import butterworth_filter
 from paradigma.config import IMUConfig, GaitFeatureExtractionConfig, ArmActivityFeatureExtractionConfig
-from paradigma.segmenting import create_segments, discard_segments, categorize_segments
-from paradigma.util import WindowedDataExtractor
+from paradigma.segmenting import create_segments, discard_segments, categorize_segments, WindowedDataExtractor
 
 from pdathome.constants import global_constants as gc, mappings as mp
 from pdathome.load import load_stage_start_end, load_sensor_data, load_video_annotations
